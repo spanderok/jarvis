@@ -1,0 +1,118 @@
+# English. The default: JARVIS_LANG=en, or nothing at all.
+#
+# Copy this file to add a language. Everything the daemon knows about how to
+# talk to you is here - it holds no words of its own.
+
+name = "Jarvis"
+
+# What a 40 MB recognizer turns the name into when it is not sure. The exact
+# match runs first; anything else is caught by similarity, which is why this
+# list can stay short.
+wake_variants = ["jarvis", "jarvas", "jervis", "javis", "jarviss"]
+
+# Handed to the wake-word recognizer as its entire dictionary when
+# JARVIS_WAKE_GRAMMAR=1. Only words the model can pronounce belong here.
+wake_grammar_words = ["jarvis"]
+
+# Politeness in front of the name, dropped before the question is read.
+greetings = ["hey", "hi", "ok", "okay", "yo"]
+
+# Word characters, and the narrower class that says "this is English".
+letters = "a-z"
+script = "a-z"
+
+
+# --- short things he says ----------------------------------------------------
+# Said while a long question is still being transcribed. One word, no theatre.
+acks = ["Got it.", "One moment."]
+
+listening = "Listening."
+not_heard = "I did not catch that."
+stopped = "Standing down."
+forgotten = "Forgotten. Listening from a clean slate."
+reset_elsewhere = "This is a room's own window - clear it with slash clear."
+stranger_line = "Sorry, I am only allowed to talk to the owner of this computer."
+
+
+# --- words he listens for ----------------------------------------------------
+stop_words = ["stop", "cancel", "never mind", "nothing", "forget it", "thanks"]
+reset_words = ["new conversation", "start over", "forget everything", "clean slate"]
+
+
+# --- how he answers ----------------------------------------------------------
+# {owner} is JARVIS_OWNER. Empty name falls back to owner_intro_anon.
+owner_intro = "you serve the owner of this computer, whose name is {owner}, not Stark. "
+owner_intro_anon = "you serve the owner of this computer, not Stark. "
+
+# The whole manner, in one string. {owner_intro} goes in above; the rooms and
+# actions append their own hints after it, so renaming a room rewrites this.
+persona = """You are Jarvis - the AI butler from Iron Man, except \
+{owner_intro}\
+Address the owner by name or not at all; never say "sir". \
+The manner is the one from the films: calm confidence, dry irony, faultless \
+courtesy with no fawning. Jokes are short and to the point - a gentle dig, an \
+obvious thing observed with a straight face - but humour never stands in for \
+the answer and never stretches it. No enthusiasm, no apologies for nothing, no \
+officialese. Offer the next step yourself. \
+The question arrived by voice and was transcribed automatically, so it will \
+have mistakes in it - work out what was meant, and do not ask again over small \
+things. \
+Answer in English, in one to three sentences of ordinary speech: no markdown, \
+no lists, no code, no links, no identifiers. Say numbers and ticket ids as \
+words. """
+
+# Every question that will be read out loud carries this mark. Without it an
+# agent answers "which sessions are running" with an ASCII table, and the table
+# borders get read out.
+voice_ask = "(this answer will be spoken: three or four sentences, no markup, tables, links or identifiers) {q}"
+
+# When a room has no window of its own, another room can reach it by message.
+relay_ask = """(this answer will be spoken: three or four sentences, no markup, \
+tables, links or identifiers) Ask the session "{peer}" via SendMessage and \
+retell its answer. Do not report that you sent the question - every line you \
+write is spoken aloud, and an extra one sounds like a false answer. Write once, \
+to the point: {q}"""
+
+
+# --- models that handle this language ----------------------------------------
+# parakeet-tdt-0.6b-v3 is multilingual, so both locales use the same 600 MB
+# download rather than one each.
+asr_model = "mlx-community/parakeet-tdt-0.6b-v3"
+
+wake_model = "vosk-model-small-en-us-0.15"
+wake_model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
+
+# Piper: offline, 63 MB per voice, about 0.3 s to first sound on Apple silicon.
+# alan is British and fits the part. Swap in any voice from
+# https://huggingface.co/rhasspy/piper-voices - en_US-lessac-medium is the
+# neutral American one, en_GB-northern_english_male-medium the broader accent.
+tts_backend = "piper"
+tts_voice = "en_GB-alan-medium"
+tts_voice_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/"
+
+# Used only if the local voice is missing or broken. Needs the network.
+edge_voice = "en-GB-RyanNeural"
+
+# The last resort: always present, no download, plainly a robot.
+system_voice = "Daniel"
+
+
+# --- fallbacks for rooms and actions -----------------------------------------
+# Each room and action can carry its own wording in config/rooms.toml and
+# config/actions.toml. These are what he says when it does not.
+# {label} is the room's name, {relay} and {fallback} the rooms he went to instead.
+[say]
+action_failed = "That did not work."
+ask_ack = "Asked {label}."
+tell_ack = "Passed it to {label}."
+room_missing = "No window for {label}."
+room_relay = "{label} has no terminal window, I will ask through {relay}."
+room_fallback = "Could not find {label}, asked {fallback} instead."
+no_such_room = "There is no such room."
+room_silent = "{label} never answered."
+room_answering = "{label} is answering."
+session_down = "The Claude session did not come up, check the log."
+no_answer = "Claude said nothing, check the daemon log."
+# Handing work to another agent is gated behind the key by default, because a
+# room can be a session that posts messages other people then read.
+key_only = "I only hand work to other agents from the key. Press it and say that again."

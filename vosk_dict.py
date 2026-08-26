@@ -84,7 +84,7 @@ def add_override(word_with_capital, db_path=DB):
     """Teach the voice one word.
 
     "тЕстовый"                 - capital letter marks the stressed vowel
-    "слотегратор=слотэгрАтор"  - left side is how it is written, right side how it sounds
+    "тендер=тЭндер"            - left side is how it is written, right side how it sounds
                                  (е -> э makes the consonant before it hard)
     """
     from vosk_tts.g2p import convert

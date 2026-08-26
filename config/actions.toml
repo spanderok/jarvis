@@ -14,7 +14,8 @@
 # him into running something else.
 #
 # Patterns are matched against a normalised phrase: lower case, letters and
-# spaces only, no punctuation.
+# spaces only, no punctuation. The wording here is English; a full Russian set
+# of the same two actions sits in actions.d/ru.example.toml.
 
 # ---------------------------------------------------------------------------
 # What the other Claude sessions on this machine are doing.
@@ -25,24 +26,24 @@
 [[action]]
 id = "agents"
 patterns = [
-  '\bагент\w*\b.{0,30}(статус|занят|дела|делает|работает|закончил|готов|где|что)',
-  '(статус|что|как|чем|где)\w*\b.{0,30}\bагент',
-  '(статус|сводк\w*)\b.{0,20}(по )?(работ|сесси)',
-  '(чем занят|что делает|что с|как там)\b.{0,15}(шеф|оркестратор)',
-  'все агенты|по агентам|мои агенты',
+  '\bagents?\b.{0,30}(status|busy|doing|working|done|finished|ready|where|what)',
+  '(status|what|how|where)\w*\b.{0,30}\bagents?\b',
+  '(status|summary)\b.{0,20}(of |on )?(the )?(work|sessions?)',
+  "(what is|whats|how is|hows)\\b.{0,15}(the chief|the agent)",
+  'all my agents|all the agents|my agents',
 ]
 run = "agents_status.py"
 speak = "retell"
-hint = """Про работу агентов ты отвечаешь сам: нужные данные тебе дают вместе с \
-вопросом, просить их у хозяина не надо."""
-prompt = """Хозяин спросил про работу агентов: «{q}»
+hint = """Questions about what the agents are doing you answer yourself: the data \
+you need arrives with the question, so never ask the owner for it."""
+prompt = """The owner asked about the agents: "{q}"
 
-Реестр живых сессий Claude на этой машине, снят только что:
+The registry of live Claude sessions on this machine, taken just now:
 {facts}
 
-Перескажи голосом: кто чем занят и как давно. Без путей, имён файлов и \
-идентификаторов. Если вопрос про одного агента - говори только про него."""
-fail_say = "Реестр сессий не прочитался, посмотри лог демона."
+Retell it out loud: who is doing what, and for how long. No paths, no file names, \
+no identifiers. If the question was about one agent, talk about that one only."""
+fail_say = "The session registry would not read, check the daemon log."
 timeout_s = 15
 
 # The script narrows the registry down to one session when the question named
@@ -52,30 +53,29 @@ timeout_s = 15
 limit = 3
 min_len = 3
 stopwords = [
-  "агент", "агенты", "агентом", "агентами", "агентов", "агенте", "агента",
-  "статус", "статусы", "работе", "работа", "работы", "сессия", "сессии",
-  "сессий", "сессиям", "что", "как", "чем", "где", "дай", "там", "занят",
-  "занята", "делает", "дела", "делают", "готов", "закончил", "мои", "все",
-  "сейчас", "мне", "покажи", "расскажи", "происходит",
+  "agent", "agents", "status", "statuses", "session", "sessions",
+  "work", "working", "what", "how", "where", "the", "give", "there",
+  "busy", "doing", "does", "done", "finished", "ready", "all", "my",
+  "now", "show", "tell", "happening", "going", "with", "and",
 ]
 
 # The question has to name an agent, the chief or the sessions. An earlier
-# version matched "как там ревью" and hijacked an ordinary question about a
-# code review.
+# version matched "how is the review going" and hijacked an ordinary question
+# about a code review.
 [[action.example]]
-phrase = "что с агентом по ревью"
+phrase = "what is the review agent doing"
 route = "agents"
 [[action.example]]
-phrase = "дай статус по работе агентов"
+phrase = "give me a status on the agents work"
 route = "agents"
 [[action.example]]
-phrase = "чем занят шеф"
+phrase = "what is the chief up to"
 route = "agents"
 [[action.example]]
-phrase = "как там ревью"
+phrase = "how is the review going"
 route = ""
 [[action.example]]
-phrase = "сколько будет дважды два"
+phrase = "what is two times two"
 route = ""
 
 
@@ -88,46 +88,46 @@ route = ""
 [[action]]
 id = "music"
 patterns = [
-  '\b(?:по)?громче\b', '\b(?:по)?тише\b',
-  '\bследующ\w*\s+(?:трек|песн\w+|композиц\w+)',
-  '\bпредыдущ\w*\s+(?:трек|песн\w+|композиц\w+)',
-  '\bпереключи\b.*\b(?:трек|песн\w+|музык\w+)',
-  '\bвыключи\s+музык', '\bвключи\s+музык',
-  '\bпоставь\s+(?:на\s+)?паузу\b',
-  '\bчто\s+(?:сейчас\s+)?(?:играет|за\s+трек|за\s+песня)',
+  '\b(?:turn it |a bit |a little )?louder\b', '\bturn (?:it |the volume )?up\b',
+  '\b(?:turn it |a bit |a little )?quieter\b', '\bturn (?:it |the volume )?down\b',
+  '\bnext (?:track|song|tune)\b', '\bprevious (?:track|song|tune)\b',
+  '\bskip (?:this|the) (?:track|song)\b',
+  '\bstop the music\b', '\bplay some music\b', '\bput on some music\b',
+  '\bpause (?:the )?(?:music|track|song)\b',
+  "\\bwhat(?:s| is)\\b.{0,12}\\b(?:playing|this track|this song)\\b",
 ]
 run = "skills/spotify/spotify.sh"
 speak = "stdout"
 formatter = "formatters:spotify"
 default_args = ["state"]
-fail_say = "Плеер не отвечает."
+fail_say = "The player is not answering."
 timeout_s = 20
 
 [[action.arg]]
-patterns = ['\b(?:по)?громче\b']
+patterns = ['\blouder\b', '\bturn (?:it |the volume )?up\b']
 args = ["vol", "+10"]
 [[action.arg]]
-patterns = ['\b(?:по)?тише\b']
+patterns = ['\bquieter\b', '\bturn (?:it |the volume )?down\b']
 args = ["vol", "-10"]
 [[action.arg]]
-patterns = ['\bследующ']
+patterns = ['\bnext\b', '\bskip\b']
 args = ["next"]
 [[action.arg]]
-patterns = ['\bпредыдущ']
+patterns = ['\bprevious\b']
 args = ["prev"]
 [[action.arg]]
-patterns = ['\bпаузу\b', '\bвыключи\s+музык']
+patterns = ['\bpause\b', '\bstop the music\b']
 args = ["pause"]
 [[action.arg]]
-patterns = ['\bвключи\s+музык']
+patterns = ['\bplay some music\b', '\bput on some music\b']
 args = ["play"]
 
 [[action.example]]
-phrase = "сделай погромче"
+phrase = "turn it up a bit"
 route = "music"
 [[action.example]]
-phrase = "что сейчас играет"
+phrase = "whats playing"
 route = "music"
 [[action.example]]
-phrase = "включи музыку"
+phrase = "put on some music"
 route = "music"

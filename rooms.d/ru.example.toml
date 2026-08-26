@@ -1,0 +1,73 @@
+# Russian wording for the two shipped rooms. A complete drop-in preset:
+#
+#     cp rooms.d/ru.example.toml rooms.d/ru.toml
+#     echo 'JARVIS_LANG=ru' >> jarvis.env
+#
+# Merged over config/rooms.toml by id, so only the fields named here change -
+# the launcher, the tint, the remote control and the work dir stay as they are.
+# That is the whole mechanism: a language is a drop-in, not a fork.
+
+[[room]]
+id = "chief"
+label = "шеф"
+session = "шеф"
+
+hint = """Тяжёлую работу - ревью, правки кода, деплой, разбор тикетов - выполняет \
+рабочий агент, хозяин зовёт его шефом. Если просьба про это, скажи, что передашь, \
+и попроси произнести «передай шефу» с задачей."""
+
+ask = ["спроси шефа", "спроси у шефа", "узнай у шефа",
+       "спроси оркестратора", "спроси у оркестратора", "узнай у оркестратора",
+       "спроси агента", "спроси у агента", "узнай у агента"]
+tell = ["передай шефу", "скажи шефу", "поручи шефу", "пусть шеф",
+        "передай оркестратору", "скажи оркестратору", "поручи оркестратору",
+        "пусть оркестратор",
+        "передай агенту", "скажи агенту", "поручи агенту", "пусть агент"]
+
+# A bare name counts only at the start of the sentence and as a whole word, so
+# "шеф-повар уволился" stays an ordinary question.
+bare = ["шеф", "оркестратор", "агент"]
+bare_kind = "tell"
+
+ack_tell = "Передал шефу."
+ack_ask = "Спросил шефа."
+ack_missing = "Окно шефа не найдено."
+
+
+[[room]]
+id = "chat"
+label = "чат"
+session = "чат"
+enabled = false                 # delete this line to switch the chat room on
+
+hint = """В чаты ходит отдельный агент, и только по прямой просьбе. Спросили про \
+переписку или непрочитанное - скажи, что сам туда не смотришь, и попроси \
+произнести «посмотри в слаке» с вопросом."""
+
+# Name the thing, never the topic. An early version routed on "непрочитанное",
+# "сводка по чатам" and "кто мне писал", and ordinary questions kept ending up
+# here - "что написал Петров" was about a commit. The product's own name is
+# the thing nobody says by accident. A bare "чат" is the topic, not the name.
+mention_patterns = ['\bслак\w*']
+
+ack_relay = "{label} не в окне терминала, спрошу его через {relay}."
+ack_fallback = "{label} не нашёл, спросил {fallback}."
+ack_missing = "Ни {label}, ни {fallback} не нашёл."
+
+# Checked by `jarvis_daemon.py --selfcheck`. The negative ones - route = "" -
+# are the ones that catch a mention word reaching too far.
+[[room.example]]
+phrase = "посмотри в слаке, что написал Петров"
+route = "chat"
+[[room.example]]
+phrase = "что там в слаке"
+route = "chat"
+[[room.example]]
+phrase = "что написал Петров"
+route = ""
+[[room.example]]
+phrase = "дай сводку по чату"
+route = ""
+[[room.example]]
+phrase = "что по непрочитанным сообщениям"
+route = ""

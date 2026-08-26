@@ -16,7 +16,17 @@ import time
 
 import edge_tts
 
-VOICE = os.environ.get("JARVIS_EDGE_VOICE", "ru-RU-the ownerNeural")
+def _locale_voice() -> str:
+    """The network voice for the current language, or a plain English one."""
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import lang
+        return lang.current().edge_voice or "en-GB-RyanNeural"
+    except Exception:
+        return "en-GB-RyanNeural"
+
+
+VOICE = os.environ.get("JARVIS_EDGE_VOICE") or _locale_voice()
 RATE = os.environ.get("JARVIS_EDGE_RATE", "+5%")
 PITCH = os.environ.get("JARVIS_EDGE_PITCH", "+0Hz")
 VOLUME = os.environ.get("JARVIS_EDGE_VOLUME", "+0%")

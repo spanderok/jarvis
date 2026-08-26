@@ -1,0 +1,103 @@
+# Russian. JARVIS_LANG=ru
+#
+# The original language this was built in, kept whole: the wake word thresholds
+# and the mangled variants below are measured against the real Russian models,
+# not translated from the English file.
+
+name = "Джарвис"
+
+# What the small vosk model turns the name into. Measured, not guessed: at
+# similarity 0.77 "сервис" and "дарвин" start matching, so the threshold sits at
+# 0.80 and these are the forms that clear it - "чарвис" 0.83, "жавис" 0.91,
+# "джавис" 0.92, "джарвиса" 0.93.
+wake_variants = ["джарвис", "джарвес", "жарвис", "джервис", "jarvis", "javis"]
+
+# Handed to the recognizer as its whole dictionary when JARVIS_WAKE_GRAMMAR=1.
+# The mangled forms above are deliberately left out: vosk drops a word it cannot
+# pronounce and warns about it on every recognizer build, and one is built after
+# every phrase. With a single word allowed, "джавис" decodes to it anyway.
+wake_grammar_words = ["джарвис"]
+
+greetings = ["эй", "hey", "hi"]
+
+# Half the technical vocabulary arrives spelled in latin, so it counts as word
+# characters - but only Cyrillic proves the transcriber stayed in Russian.
+letters = "а-яёa-z"
+script = "а-яё"
+
+
+# --- short things he says ----------------------------------------------------
+acks = ["Принял.", "Секунду."]
+
+listening = "Слушаю."
+not_heard = "Не расслышал, повтори."
+stopped = "Отбой."
+forgotten = "Забыл. Слушаю с чистого листа."
+reset_elsewhere = "Это окно комнаты, начни заново командой слэш клеар."
+stranger_line = "Извините, мне разрешено разговаривать только с хозяином этого компьютера."
+
+
+# --- words he listens for ----------------------------------------------------
+stop_words = ["стоп", "отбой", "ничего", "отмена", "забудь", "спасибо"]
+reset_words = ["новый разговор", "начнём заново", "забудь всё", "с чистого листа"]
+
+
+# --- how he answers ----------------------------------------------------------
+owner_intro = "служишь не Старку, а хозяину этого компьютера, его зовут {owner}. "
+owner_intro_anon = "служишь не Старку, а хозяину этого компьютера. "
+
+persona = """Ты Джарвис - тот самый ИИ-дворецкий из «Железного человека», только \
+{owner_intro}\
+Обращайся на «ты», по имени или вообще без обращения; \
+слово «сэр» не используй никогда. \
+Манера как в фильмах: спокойная уверенность, сухая ирония, безукоризненная \
+вежливость без подхалимства. Шутишь коротко и к месту - можешь мягко поддеть, \
+отметить очевидное с невозмутимым лицом, но юмор никогда не заменяет ответ и не \
+растягивает его. Без восторгов, без извинений без причины, без канцелярита. Сам \
+предлагаешь следующий шаг. \
+Вопрос пришёл голосом и распознан автоматически, огрехи бывают - догадывайся по \
+смыслу, по мелочам не переспрашивай. \
+Отвечай по-русски, одним-тремя предложениями, живой речью: никакого markdown, \
+списков, кода, ссылок и идентификаторов. Числа и номера тикетов произноси \
+словами. """
+
+voice_ask = "(ответ пойдёт в голос: три-четыре предложения, без разметки, таблиц, ссылок и идентификаторов) {q}"
+
+relay_ask = """(ответ пойдёт в голос: три-четыре предложения, без разметки, \
+таблиц, ссылок и идентификаторов) Спроси через SendMessage сессию «{peer}» и \
+перескажи её ответ. Про то, что отправил вопрос, не отчитывайся - Джарвис \
+озвучивает каждую твою реплику, и лишняя строка звучит как ложный ответ. Напиши \
+один раз, по делу: {q}"""
+
+
+# --- models that handle this language ----------------------------------------
+asr_model = "mlx-community/parakeet-tdt-0.6b-v3"
+
+wake_model = "vosk-model-small-ru-0.22"
+wake_model_url = "https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip"
+
+# vosk-tts 0.7, speaker 4. 359 MB with the stress dictionary in sqlite.
+tts_backend = "vosk"
+tts_voice = "4"
+tts_voice_url = "https://alphacephei.com/vosk/models/vosk-model-tts-ru-0.7-multi.zip"
+
+edge_voice = "ru-RU-DmitryNeural"
+system_voice = "Yuri"
+
+
+# --- fallbacks for rooms and actions -----------------------------------------
+# Each room and action can carry its own wording in config/rooms.toml and
+# config/actions.toml. These are what he says when it does not.
+[say]
+action_failed = "Не получилось."
+ask_ack = "Спросил {label}."
+tell_ack = "Передал {label}."
+room_missing = "Окно {label} не найдено."
+room_relay = "{label} не в окне терминала, спрошу через {relay}."
+room_fallback = "{label} не нашёл, спросил {fallback}."
+no_such_room = "Такой комнаты нет."
+room_silent = "{label} так и не ответил."
+room_answering = "{label} отвечает."
+session_down = "Сессия Клода не поднялась, посмотри лог."
+no_answer = "Клод не ответил, посмотри лог демона."
+key_only = "Другим агентам передаю только с клавиши. Нажми её и повтори."

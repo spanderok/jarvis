@@ -1,0 +1,122 @@
+# Russian wording for the two shipped actions. A complete drop-in preset:
+#
+#     cp actions.d/ru.example.toml actions.d/ru.toml
+#
+# Merged over config/actions.toml by id. The commands, the timeouts and the
+# formatter stay as they are - only the patterns, the words and what he says.
+#
+# ---------------------------------------------------------------------------
+# What the other Claude sessions on this machine are doing.
+#
+# The registry lines are facts, not speech, so they go through Jarvis and come
+# out in his own voice instead of being read aloud as a table.
+# ---------------------------------------------------------------------------
+[[action]]
+id = "agents"
+patterns = [
+  '\bагент\w*\b.{0,30}(статус|занят|дела|делает|работает|закончил|готов|где|что)',
+  '(статус|что|как|чем|где)\w*\b.{0,30}\bагент',
+  '(статус|сводк\w*)\b.{0,20}(по )?(работ|сесси)',
+  '(чем занят|что делает|что с|как там)\b.{0,15}(шеф|оркестратор)',
+  'все агенты|по агентам|мои агенты',
+]
+run = "agents_status.py"
+speak = "retell"
+hint = """Про работу агентов ты отвечаешь сам: нужные данные тебе дают вместе с \
+вопросом, просить их у хозяина не надо."""
+prompt = """Хозяин спросил про работу агентов: «{q}»
+
+Реестр живых сессий Claude на этой машине, снят только что:
+{facts}
+
+Перескажи голосом: кто чем занят и как давно. Без путей, имён файлов и \
+идентификаторов. Если вопрос про одного агента - говори только про него."""
+fail_say = "Реестр сессий не прочитался, посмотри лог демона."
+timeout_s = 15
+
+# The script narrows the registry down to one session when the question named
+# one. These words name none of them, so they are dropped before the rest are
+# handed over as arguments.
+[action.words]
+limit = 3
+min_len = 3
+stopwords = [
+  "агент", "агенты", "агентом", "агентами", "агентов", "агенте", "агента",
+  "статус", "статусы", "работе", "работа", "работы", "сессия", "сессии",
+  "сессий", "сессиям", "что", "как", "чем", "где", "дай", "там", "занят",
+  "занята", "делает", "дела", "делают", "готов", "закончил", "мои", "все",
+  "сейчас", "мне", "покажи", "расскажи", "происходит",
+]
+
+# The question has to name an agent, the chief or the sessions. An earlier
+# version matched "как там ревью" and hijacked an ordinary question about a
+# code review.
+[[action.example]]
+phrase = "что с агентом по ревью"
+route = "agents"
+[[action.example]]
+phrase = "дай статус по работе агентов"
+route = "agents"
+[[action.example]]
+phrase = "чем занят шеф"
+route = "agents"
+[[action.example]]
+phrase = "как там ревью"
+route = ""
+[[action.example]]
+phrase = "сколько будет дважды два"
+route = ""
+
+
+# ---------------------------------------------------------------------------
+# Music. An example of an action with several wordings behind one command:
+# `arg` rules pick the arguments, first match wins, `default_args` catches the
+# rest. Delete this block and the music commands are gone - nothing else
+# refers to it.
+# ---------------------------------------------------------------------------
+[[action]]
+id = "music"
+patterns = [
+  '\b(?:по)?громче\b', '\b(?:по)?тише\b',
+  '\bследующ\w*\s+(?:трек|песн\w+|композиц\w+)',
+  '\bпредыдущ\w*\s+(?:трек|песн\w+|композиц\w+)',
+  '\bпереключи\b.*\b(?:трек|песн\w+|музык\w+)',
+  '\bвыключи\s+музык', '\bвключи\s+музык',
+  '\bпоставь\s+(?:на\s+)?паузу\b',
+  '\bчто\s+(?:сейчас\s+)?(?:играет|за\s+трек|за\s+песня)',
+]
+run = "skills/spotify/spotify.sh"
+speak = "stdout"
+formatter = "formatters:spotify"
+default_args = ["state"]
+fail_say = "Плеер не отвечает."
+timeout_s = 20
+
+[[action.arg]]
+patterns = ['\b(?:по)?громче\b']
+args = ["vol", "+10"]
+[[action.arg]]
+patterns = ['\b(?:по)?тише\b']
+args = ["vol", "-10"]
+[[action.arg]]
+patterns = ['\bследующ']
+args = ["next"]
+[[action.arg]]
+patterns = ['\bпредыдущ']
+args = ["prev"]
+[[action.arg]]
+patterns = ['\bпаузу\b', '\bвыключи\s+музык']
+args = ["pause"]
+[[action.arg]]
+patterns = ['\bвключи\s+музык']
+args = ["play"]
+
+[[action.example]]
+phrase = "сделай погромче"
+route = "music"
+[[action.example]]
+phrase = "что сейчас играет"
+route = "music"
+[[action.example]]
+phrase = "включи музыку"
+route = "music"

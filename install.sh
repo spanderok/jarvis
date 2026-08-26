@@ -1,8 +1,9 @@
 #!/bin/bash
 # Set up Jarvis on this Mac. Safe to re-run: it skips what is already in place.
 #
-#   bash install.sh              everything
-#   bash install.sh models       only download the voice models
+#   bash install.sh              everything, for the language in jarvis.env
+#   bash install.sh models       only download the models for that language
+#   JARVIS_LANG=ru bash install.sh models    the models for another language
 #   bash install.sh link         only link skills and commands into ~/.claude
 #   bash install.sh keymap       only install the login item for keymap.sh
 #
@@ -11,6 +12,11 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HOME_DIR="$HOME/.claude/jarvis"
 MODELS="$REPO/models"
 STEP="${1:-all}"
+
+# Which models to fetch is the locale's business. Read once, before anything
+# needs it, so a typo in JARVIS_LANG stops the installer rather than half of it.
+LANG_FILE=""
+lang_field() { python3 "$REPO/lang.py" get "$1" 2>/dev/null; }
 
 say() { printf '\n== %s\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -27,6 +33,21 @@ if ! have uv; then
   exit 1
 fi
 have claude || echo "warning: the claude CLI is not on PATH - Jarvis needs it to answer." >&2
+
+# Load jarvis.env early: JARVIS_LANG lives there, and it decides what gets
+# downloaded below.
+if [ -f "$REPO/jarvis.env" ]; then
+  set -a; . "$REPO/jarvis.env"; set +a
+fi
+JARVIS_LANG="${JARVIS_LANG:-en}"
+export JARVIS_LANG
+if ! LANG_FILE=$(python3 "$REPO/lang.py" get name 2>&1); then
+  echo "$LANG_FILE" >&2
+  echo "JARVIS_LANG=$JARVIS_LANG has no locale file. Available:" >&2
+  python3 "$REPO/lang.py" list >&2
+  exit 1
+fi
+echo "language: $JARVIS_LANG (wake word: $LANG_FILE)"
 
 # ------------------------------------------------------- the ~/.claude/jarvis path
 # Every script and skill refers to ~/.claude/jarvis. If the repo lives elsewhere,
@@ -82,26 +103,55 @@ fi
 
 # --------------------------------------------------------------------- models
 if [ "$STEP" = all ] || [ "$STEP" = models ]; then
-  say "models (about 400 MB, one time)"
+  say "models for $JARVIS_LANG (one time)"
   mkdir -p "$MODELS"
 
-  # 1. Wake word and command recognition, offline Russian ASR.
-  if [ -d "$MODELS/vosk-model-small-ru-0.22" ]; then
-    echo "wake model: already there"
+  WAKE_MODEL=$(lang_field wake_model)
+  WAKE_URL=$(lang_field wake_model_url)
+  TTS_BACKEND=$(lang_field tts_backend)
+  TTS_VOICE=$(lang_field tts_voice)
+  TTS_URL=$(lang_field tts_voice_url)
+
+  # 1. Wake word spotting: a small offline recognizer for this language.
+  if [ -d "$MODELS/$WAKE_MODEL" ]; then
+    echo "wake model: $WAKE_MODEL already there"
   else
-    echo "wake model: downloading (46 MB)"
-    curl -fL# -o /tmp/vosk-asr.zip \
-      https://alphacephei.com/vosk/models/vosk-model-small-ru-0.22.zip
+    echo "wake model: downloading $WAKE_MODEL (about 45 MB)"
+    curl -fL# -o /tmp/vosk-asr.zip "$WAKE_URL"
     unzip -q /tmp/vosk-asr.zip -d "$MODELS" && rm -f /tmp/vosk-asr.zip
   fi
 
-  # 2. The voice he speaks with, plus the stress dictionary it needs.
+  # 2a. The English voice: piper, two files per voice, no build step.
+  if [ "$TTS_BACKEND" = "piper" ]; then
+    mkdir -p "$MODELS/piper"
+    if [ -f "$MODELS/piper/$TTS_VOICE.onnx" ]; then
+      echo "voice: $TTS_VOICE already there"
+    else
+      echo "voice: downloading $TTS_VOICE (63 MB)"
+      curl -fL# -o "$MODELS/piper/$TTS_VOICE.onnx" "$TTS_URL$TTS_VOICE.onnx" \
+        && curl -fL# -o "$MODELS/piper/$TTS_VOICE.onnx.json" "$TTS_URL$TTS_VOICE.onnx.json" \
+        || echo "warning: voice download failed - he will fall back to say -v $(lang_field system_voice)" >&2
+    fi
+    # A second voice costs 63 MB and one line. Handy for telling two rooms
+    # apart by ear, and for hearing what an accent does to a long answer.
+    for extra in ${JARVIS_EXTRA_VOICES:-}; do
+      [ -f "$MODELS/piper/$extra.onnx" ] && continue
+      family="${extra%%-*}"; rest="${extra#*-}"; who="${rest%%-*}"; qual="${rest##*-}"
+      base="https://huggingface.co/rhasspy/piper-voices/resolve/main/${family%%_*}/$family/$who/$qual/"
+      echo "extra voice: downloading $extra"
+      curl -fL# -o "$MODELS/piper/$extra.onnx" "$base$extra.onnx" \
+        && curl -fL# -o "$MODELS/piper/$extra.onnx.json" "$base$extra.onnx.json" \
+        || echo "warning: could not fetch $extra" >&2
+    done
+  fi
+
+  # 2b. The Russian voice: vosk-tts, plus the stress dictionary it needs.
+  if [ "$TTS_BACKEND" = "vosk" ]; then
   if [ -f "$MODELS/vosk-0.7/model.onnx" ]; then
     echo "voice model: already there"
   else
     echo "voice model: downloading (140 MB)"
-    curl -fL# -o /tmp/vosk-tts.zip \
-      https://alphacephei.com/vosk/models/vosk-model-tts-ru-0.7-multi.zip
+    curl -fL# -o /tmp/vosk-tts.zip "$TTS_URL"
     unzip -q /tmp/vosk-tts.zip -d /tmp/vosk-tts && rm -f /tmp/vosk-tts.zip
     src=$(find /tmp/vosk-tts -maxdepth 2 -name model.onnx | head -1)
     if [ -n "$src" ]; then
@@ -124,18 +174,9 @@ if [ "$STEP" = all ] || [ "$STEP" = models ]; then
     echo "warning: no dictionary file in $MODELS/vosk-0.7 - the voice will read" >&2
     echo "         unknown words with default stress." >&2
   fi
-
-  # 3. Silero, the fallback voice. speak.py downloads it on first use, so this
-  #    is only a head start.
-  if [ -f "$MODELS/v4_ru.pt" ]; then
-    echo "silero voice: already there"
-  else
-    echo "silero voice: downloading (38 MB)"
-    curl -fL# -o "$MODELS/v4_ru.pt" https://models.silero.ai/models/tts/ru/v4_ru.pt \
-      || echo "warning: silero download failed, speak.py will retry later" >&2
   fi
 
-  # 4. Speaker verification is optional. Without campplus.onnx voiceprint.py
+  # 3. Speaker verification is optional. Without campplus.onnx voiceprint.py
   #    fails open - Jarvis answers whoever speaks, which is the default anyway.
   if [ -f "$MODELS/campplus.onnx" ]; then
     echo "speaker check: model present"
@@ -170,5 +211,6 @@ cat <<'NEXT'
    System Settings -> Privacy & Security -> Input Monitoring
    (or skip it and bind jarvis-key.sh to a shortcut in Shortcuts.app)
 3. Start him:  bash ~/.claude/jarvis/jarvisd.sh
-   Then say "Джарвис".
+   Then say his name.
 NEXT
+echo "   (this build is set to $JARVIS_LANG - the wake word is \"$LANG_FILE\")"
