@@ -9,13 +9,13 @@
 One exchange, end to end:
   1. Wake engine listens to the mic (16 kHz mono).
      - vosk (default): offline Russian ASR, 87 MB model, triggers on the real
-       Russian word "Джарвис". Free, no registration, no network.
+       name itself. Free, no registration, no network.
      - oww: openWakeWord "hey jarvis", English pronunciation only.
      - porcupine: Picovoice, needs an access key; supports a custom .ppn.
   2. Chime, then record until SILENCE_SEC of quiet - or until the hotkey is
      pressed, which ends the recording immediately.
   3. parakeet-mlx transcribes locally; a leading wake word is stripped.
-     If only the wake word was said, Jarvis says "Слушаю" and waits.
+     If only the wake word was said, Jarvis prompts and waits.
   4. `claude -p` answers inside one resumable session, the reply is spoken.
   5. Follow-up window: for FOLLOWUP_SEC after the reply Jarvis keeps listening
      without a wake word, so the conversation can continue naturally.
@@ -27,11 +27,11 @@ Keys (need macOS Input Monitoring permission for the terminal you start from):
   M5 / F13 / End once  - "switch to me": ends your sentence while he listens,
                          interrupts him while he thinks or talks, wakes him when
                          idle. Afterwards he always listens for what you say next
-  M5 / F13 / End twice - drop it entirely, back to waiting for "Джарвис"
+  The key twice - drop it entirely, back to waiting for the name
   Space                - same as one press, but never wakes him from idle, so
                          normal typing is unaffected
   Escape               - same as two presses: shut up and wait. He keeps
-                         reacting to "Джарвис". Only acts while he is busy, so
+                         reacting to the name. Only acts while he is busy, so
                          Escape in an editor never touches him
   Signal equivalents that need no permission:
     kill -USR1 <pid>   one press
@@ -93,6 +93,8 @@ import wave
 import numpy as np
 import sounddevice as sd
 
+import lang as lang_mod
+import memory as memory_mod
 import plugins
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -105,6 +107,17 @@ for _extra in ("/opt/homebrew/bin", "/usr/local/bin",
                os.path.expanduser("~/.local/bin")):
     if os.path.isdir(_extra) and _extra not in os.environ.get("PATH", "").split(":"):
         os.environ["PATH"] = f"{_extra}:{os.environ.get('PATH', '')}"
+
+# Nothing he says or listens for is written here. It all comes from
+# locales/<lang>.toml - see lang.py, and JARVIS_LANG to pick one.
+#
+# A locale that will not load stops the daemon at start. Half a language is
+# worse than none: he would wake to the name and then answer in the wrong one.
+try:
+    LANG = lang_mod.current()
+except lang_mod.LocaleError as _lang_error:
+    print(f"jarvis: {_lang_error}", file=sys.stderr)
+    raise SystemExit(2)
 
 SAMPLE_RATE = 16000
 # The trade is symmetric: a longer pause never cuts him off mid-thought, but every
@@ -227,7 +240,7 @@ VAD_SUB_LEN = 160          # 10 ms at 16 kHz
 # zeros between words - and a short window dips into those gaps. A long one rides
 # over them while a sparse noise like typing stays low, because typing is sparse
 # over any window length. On the quiet tail of 19:18, where he trailed off with
-# "тише, тише" and the take cut him off, a 12-frame window averaged 4.2 against a
+# a quiet aside and the take cut him off, a 12-frame window averaged 4.2 against a
 # threshold of 5.0 - it closed on him. Over 24 frames the same tail averages 5.6.
 VAD_WIN_FRAMES = int(os.environ.get("JARVIS_VAD_WIN", "24"))
 # 2.5 rather than 4.0 because the owner said on 21.08 they will not type while talking,
@@ -243,8 +256,8 @@ VAD_WIN_FRAMES = int(os.environ.get("JARVIS_VAD_WIN", "24"))
 # cannot tell "thinking for a second" from "finished", because both look like the
 # same quiet window. Hence the second, longer pause below.
 VAD_WIN_AVG = float(os.environ.get("JARVIS_VAD_WIN_AVG", "1.5"))
-# ...and a single frame far above the threshold is speech too - a short "да" or
-# "стоп" never gets 250 ms. The music that started all this peaked at 124-204,
+# ...and a single frame far above the threshold is speech too - a one-syllable
+# "yes" or "stop" never gets 250 ms. The music that started this peaked at 124-204,
 # which does not even reach the 300 floor, so this cannot bring it back.
 LOUD_ENOUGH_ALONE = float(os.environ.get("JARVIS_LOUD_ALONE", "1.6"))
 # Starting a phrase and continuing one need different bars. With music in the room
@@ -328,7 +341,9 @@ LEVEL_PARTS = 4
 # 1800 after listening to it on real speech: 2500 was closer but still short of
 # what he wanted to see. Loud phrases now clip at the edge on purpose.
 LEVEL_SCALE = float(os.environ.get("JARVIS_LEVEL_SCALE", "1800"))
-ASR_MODEL = "mlx-community/parakeet-tdt-0.6b-v3"
+# The transcriber, named by the locale: parakeet-tdt-0.6b-v3 is multilingual,
+# so English and Russian share one 600 MB download instead of one each.
+ASR_MODEL = LANG.asr_model
 CLAUDE_MODEL = os.environ.get("JARVIS_MODEL", "sonnet")  # voice wants speed
 # What the voice session may use on its own. Kept short on purpose: every tool it
 # is allowed to reach is a tool it may spend seconds on before saying a word.
@@ -340,7 +355,7 @@ STRICT_MCP = os.environ.get("JARVIS_MCP") != "1"
 # rest are big so speech keeps its natural flow instead of sounding chopped.
 # The first chunk used to be 6 characters, to start the answer while Claude was
 # still writing. the owner listened to a whole day of speech on 21.08 and the cost
-# showed: an answer opening with "Готово." spoke 0.3 s, stopped, and only then
+# showed: an answer opening with one short word spoke 0.3 s, stopped, and only then
 # said the real sentence. Measured on 49 phrases of that day the voice runs at
 # 17.3 characters per second, so 60 characters is about 3.5 s - one spoken
 # sentence, which is the portion he asked for. Claude streams far faster than
@@ -361,7 +376,7 @@ CHIME_VOL = os.environ.get("JARVIS_CHIME_VOL", "0.6")
 # The chime plays into the same room the microphone listens to, so the recording
 # starts with our own click. Two loud frames mean "speech has started", the
 # generous wait-for-speech grace collapses to zero, and 1.5 s later the take ends
-# before the owner has said a word - which is exactly what "резко обрубился" was.
+# before the owner has said a word - which is exactly what "cut me off" was.
 CHIME_DEAF_SEC = float(os.environ.get("JARVIS_CHIME_DEAF", "0.45"))
 # How fast the bar follows a room that went quiet: 0.15 per 125 ms frame means it
 # covers most of the drop in about a second. Picked to be faster than the pause
@@ -396,39 +411,33 @@ DOUBLE_TAP_SEC = float(os.environ.get("JARVIS_DOUBLE_TAP", "0.4"))
 # closer together than this is the same press, not a double tap.
 DEBOUNCE_SEC = float(os.environ.get("JARVIS_DEBOUNCE", "0.18"))
 # said while a long question is still being transcribed: one word, no theatre
-ACKS = ["Принял.", "Секунду."]
-WAKE_VARIANTS = ("джарвис", "джарвес", "жарвис", "джервис", "jarvis", "javis")
+ACKS = list(LANG.acks)
+WAKE_VARIANTS = LANG.wake_variants
 # The spotter listens for one word, so it is handed one word and nothing else -
 # see VoskEngine. JARVIS_WAKE_GRAMMAR=0 gives it the whole dictionary back.
 # Off by default. Under music it is the only thing that hears the name at all
 # (11 calls of about 20 on 24.08 against 0 for the full dictionary), but in a
 # quiet room it fires on anything that sounds close - measured 19.08 on four
 # synthesised files, and again 24.08 as two false wakes in three minutes with
-# Spotify on. See patterns/vosk-wake-word-russian.md in the vault.
+# Spotify on.
 WAKE_GRAMMAR = os.environ.get(
     "JARVIS_WAKE_GRAMMAR", "0").lower() in ("1", "true", "yes", "on")
-# Only the words the model has a pronunciation for belong here. The mangled
-# variants above are deliberately left out: vosk drops a word it cannot
-# pronounce and prints a warning for it every time a recognizer is built, and
-# reset() builds one after every phrase. With a single word in the grammar the
-# mangled forms are unnecessary anyway - "джавис" now decodes to the only thing
-# the recognizer is allowed to print.
+# Only the words the model has a pronunciation for belong here - the locale's
+# wake_grammar_words, overridable for one run from the environment.
 WAKE_GRAMMAR_WORDS = [w.strip() for w in os.environ.get(
-    "JARVIS_WAKE_GRAMMAR_WORDS", "джарвис").split(",") if w.strip()]
+    "JARVIS_WAKE_GRAMMAR_WORDS", ",".join(LANG.wake_grammar_words)).split(",")
+    if w.strip()]
 # The exact substring test above misses whatever the small vosk model mangles the
 # name into, and the owner has to call twice. So each word of the phrase is also
-# compared to the name by similarity. The threshold cannot go below 0.80: at 0.77
-# sits "сервис", which he says all day long, and "дарвин". Above it are the real
-# mangles - "чарвис" 0.83, "жавис" 0.91, "джавис" 0.92, "джарвиса" 0.93.
+# compared to the name by similarity. For Russian the threshold cannot go below
+# 0.80 for Russian: at 0.77 sit two ordinary words he says all day long. Above
+# it are only the real mangles of the name - 0.83, 0.91, 0.92.
 WAKE_SIMILARITY = float(os.environ.get("JARVIS_WAKE_SIMILARITY", "0.80"))
 # Anything this close but under the threshold is written to the log with its score,
 # so a miss can be answered with a number instead of a guess.
 WAKE_NEAR_MISS = float(os.environ.get("JARVIS_WAKE_NEAR", "0.60"))
-STOP_WORDS = {"стоп", "отбой", "ничего", "отмена", "забудь", "спасибо"}
-# say one of these and the rest of the sentence goes to the orchestrator window
-# The orchestrator answers to three names. Bare ones ("шеф", "агент",
-# "оркестратор") only count at the start of a sentence, see split_forward.
-RESET_WORDS = {"новый разговор", "начнём заново", "забудь всё", "с чистого листа"}
+STOP_WORDS = LANG.stop_words
+RESET_WORDS = LANG.reset_words
 
 # Where a phrase can go, and what it can set off, is declared in TOML and not
 # here: config/rooms.toml, config/actions.toml, plus whatever you drop into
@@ -445,44 +454,29 @@ except plugins.ConfigError as _cfg_error:
     print(f"jarvis: {_cfg_error}", file=sys.stderr)
     raise SystemExit(2)
 
+# Long-term memory. Off unless config/memory.toml points at a store - see
+# memory.py. A broken config stops him at start for the same reason a broken
+# room does: silently forgetting is not something anybody notices in time.
+try:
+    MEM = memory_mod.load()
+except memory_mod.MemoryError_ as _mem_error:
+    print(f"jarvis: {_mem_error}", file=sys.stderr)
+    raise SystemExit(2)
+
 OWNER = os.environ.get("JARVIS_OWNER", "").strip()
-_OWNER_INTRO = (f"служишь не Старку, а хозяину этого компьютера, его зовут {OWNER}. "
-                if OWNER else "служишь не Старку, а хозяину этого компьютера. ")
 
-SYSTEM_PROMPT = (
-    "Ты Джарвис - тот самый ИИ-дворецкий из «Железного человека», только "
-    + _OWNER_INTRO +
-    "Обращайся на «ты», по имени или вообще без обращения; "
-    "слово «сэр» не используй никогда. "
-    "Манера как в фильмах: спокойная уверенность, сухая ирония, безукоризненная "
-    "вежливость без подхалимства. Шутишь коротко и к месту - можешь мягко "
-    "поддеть, отметить очевидное с невозмутимым лицом, но юмор никогда не "
-    "заменяет ответ и не растягивает его. Без восторгов, без извинений без "
-    "причины, без канцелярита. Сам предлагаешь следующий шаг. "
-    "Вопрос пришёл голосом и распознан автоматически, огрехи бывают - "
-    "догадывайся по смыслу, по мелочам не переспрашивай. "
-    "Отвечай по-русски, одним-тремя предложениями, живой речью: никакого "
-    "markdown, списков, кода, ссылок и идентификаторов. Числа и номера тикетов "
-    "произноси словами. "
-    # What he is told about his rooms and actions lives next to them, so that
-    # renaming a room or deleting an action rewrites this prompt with it.
-    + CFG.hints()
-)
+# The manner comes from the locale; what he is told about his rooms and actions
+# lives next to them. Rename a room and this prompt is rewritten with it.
+SYSTEM_PROMPT = LANG.system_prompt(OWNER, CFG.hints())
 
-
-# When the rocket agent has no window (started inside another Claude session, or
-# in a WebStorm pane), the daemon cannot type into it - but the chef can reach it
-# by cross-session message, so the question goes there with instructions.
-RELAY_ASK = ('(ответ пойдёт в голос: три-четыре предложения, без разметки, '
-             'таблиц, ссылок и идентификаторов) Спроси через SendMessage сессию '
-             '«{peer}» и перескажи её ответ. Про то, что отправил вопрос, не '
-             'отчитывайся - Джарвис озвучивает каждую твою реплику, и лишняя '
-             'строка звучит как ложный ответ. Напиши один раз, по делу: {q}')
-# An agent's answer is read off its screen and spoken as it is, so every question
-# asked by voice carries this mark. Without it the chef answered "какие сессии
-# активны" with an ASCII table and Jarvis read its borders out loud.
-VOICE_ASK = ("(ответ пойдёт в голос: три-четыре предложения, без разметки, "
-             "таблиц, ссылок и идентификаторов) {q}")
+# When a room has no window of its own (started inside another Claude session,
+# or in an IDE pane), the daemon cannot type into it - but a room that does have
+# one can reach it by cross-session message, so the question goes there instead.
+RELAY_ASK = LANG.relay_ask
+# A room's answer is read off its screen and spoken as it is, so every question
+# asked by voice carries this mark. Without it a room answered "which sessions
+# are running" with an ASCII table and Jarvis read its borders out loud.
+VOICE_ASK = LANG.voice_ask
 
 
 # In listen-only mode stdout is an event stream for the Monitor tool: every line
@@ -573,7 +567,7 @@ def locked_pause(trigger, audio_q, engine) -> bool:
     if screen_locked():
         if MIC is not None and MIC.stream is not None:
             MIC.close()
-            log("экран заблокирован - микрофон отпущен, не слушаю")
+            log("screen locked - microphone released, not listening")
         if trigger.state != trigger.ASLEEP:
             trigger.set_state(trigger.ASLEEP)
         time.sleep(0.5)
@@ -582,7 +576,7 @@ def locked_pause(trigger, audio_q, engine) -> bool:
         MIC.open()
         flush(audio_q)
         engine.reset()
-        log("экран разблокирован - слушаю снова")
+        log("screen unlocked - listening again")
     return False
 
 
@@ -592,13 +586,13 @@ def next_frame(audio_q):
         try:
             return audio_q.get(timeout=MIC_SILENT_SEC)
         except queue.Empty:
-            log(f"микрофон молчит {MIC_SILENT_SEC:.0f}s, перезапускаю поток")
+            log(f"microphone silent for {MIC_SILENT_SEC:.0f}s, reopening the stream")
             if MIC is None:
                 continue
             try:
                 MIC.open()
             except Exception as e:
-                log(f"поток не открылся: {e}")
+                log(f"stream would not open: {e}")
                 time.sleep(1.0)
 
 
@@ -620,7 +614,7 @@ def apply_keymap() -> None:
 
 # The listener writes its diagnostics into the pipe of whichever chat session
 # started it, and no other session can read that. A copy on disk is what makes
-# "посмотри по логам" answerable from anywhere.
+# "have a look in the log" answerable from anywhere.
 LOG_FILE = os.path.expanduser("~/.claude/jarvis/listener.log")
 LOG_FILE_MAX = 2_000_000    # bytes; older lines are dropped by a plain rewrite
 
@@ -662,13 +656,13 @@ def turn_mark(stage: str) -> None:
     if t0 is None or stage in TURN["seen"]:
         return
     TURN["seen"].add(stage)
-    log(f"этап {stage}: {time.monotonic() - t0:.2f} с от пробуждения")
+    log(f"stage {stage}: {time.monotonic() - t0:.2f}s since waking")
 
 
 def trace(msg: str) -> None:
     """Diagnostic trail with milliseconds, file only.
 
-    "он резко обрубился" is unanswerable from the event stream alone: it shows
+    "it cut me off" is unanswerable from the event stream alone: it shows
     what was heard, never why the recorder stopped. This writes the whole envelope
     of every take - thresholds, frame levels, the exact reason - so the next
     report can be answered by reading one file instead of guessing.
@@ -742,9 +736,7 @@ def chime() -> None:
 
 # What Jarvis says to a stranger. He says it once and then holds his tongue for a
 # while: a television in the room would otherwise have him repeating it forever.
-STRANGER_LINE = os.environ.get(
-    "JARVIS_STRANGER_LINE",
-    "Извините, мне разрешено разговаривать только с хозяином этого компьютера.")
+STRANGER_LINE = LANG.stranger_line
 STRANGER_QUIET_SEC = float(os.environ.get("JARVIS_STRANGER_QUIET", "60"))
 _refused_at = 0.0
 
@@ -754,7 +746,7 @@ def warm_voiceprint() -> None:
         import voiceprint
         voiceprint.warmup()
     except Exception as e:
-        log(f"голосовой профиль не поднялся: {e}")
+        log(f"voice profile would not load: {e}")
 
 
 # A wrong refusal is the expensive kind of mistake: he spoke, nothing happened,
@@ -778,7 +770,7 @@ def keep_rejected(audio, score: float) -> None:
         for stale in old:
             os.unlink(os.path.join(REJECTED_DIR, stale))
     except Exception as e:
-        trace(f"отброшенную фразу сохранить не смог: {e}")
+        trace(f"could not keep the rejected phrase: {e}")
 
 
 def voice_is_his(audio, speaker=None, aloud: bool = True) -> bool:
@@ -800,17 +792,17 @@ def voice_is_his(audio, speaker=None, aloud: bool = True) -> bool:
         import voiceprint
         ok, score, why = voiceprint.check(judged)
     except Exception as e:
-        log(f"проверка голоса пропущена: {e}")
+        log(f"voice check skipped: {e}")
         return True
     if ok:
         if why not in ("off", "no profile") and not why.startswith("too short"):
-            trace(f"голос: {why}")
+            trace(f"voice: {why}")
         return True
-    log(f"чужой голос ({score:.2f}), фраза отброшена")
-    trace(f"голос: {why}")
+    log(f"not his voice ({score:.2f}), phrase dropped")
+    trace(f"voice: {why}")
     keep_rejected(audio, score)
     if not aloud:
-        trace("отказ вслух пропущен: эту запись никто не начинал")
+        trace("refusal not spoken: nobody started this recording")
         return False
     if time.monotonic() - _refused_at > STRANGER_QUIET_SEC:
         _refused_at = time.monotonic()
@@ -823,7 +815,7 @@ def voice_is_his(audio, speaker=None, aloud: bool = True) -> bool:
         else:
             speak(STRANGER_LINE, trigger=None)
     else:
-        trace("отказ вслух пропущен: недавно уже отвечал чужому")
+        trace("refusal not spoken: a stranger was answered recently")
     return False
 
 
@@ -831,7 +823,7 @@ def heard_wake(text: str) -> bool:
     """Did the phrase contain his name - exactly, or mangled beyond a substring?
 
     Two passes on purpose. The substring test is what has always worked and costs
-    nothing; the similarity pass is what catches "джавис" and "чарвис", which the
+    nothing; the similarity pass is what catches the mangled forms, which the
     small model produces often enough that he ends up calling twice.
     """
     if not text:
@@ -840,19 +832,19 @@ def heard_wake(text: str) -> bool:
     if any(v in low for v in WAKE_VARIANTS[:4]):
         return True
     best, word = 0.0, ""
-    for w in re.findall(r"[а-яёa-z]+", low):
-        if len(w) < 5:                      # "жар", "чар" match too much of anything
+    for w in LANG.word_re.findall(low):
+        if len(w) < 5:                      # short fragments match too much of anything
             continue
         for v in WAKE_VARIANTS[:4]:
             r = difflib.SequenceMatcher(None, w, v).ratio()
             if r > best:
                 best, word = r, w
     if best >= WAKE_SIMILARITY:
-        log(f"пробуждение по похожести: {word!r} на {best:.2f}")
+        log(f"woke on similarity: {word!r} scored {best:.2f}")
         return True
     if best >= WAKE_NEAR_MISS:
-        log_quiet(f"почти услышал имя: {word!r} похожесть {best:.2f}, "
-                  f"порог {WAKE_SIMILARITY}")
+        log_quiet(f"nearly heard the name: {word!r} similarity {best:.2f}, "
+                  f"threshold {WAKE_SIMILARITY}")
     return False
 
 
@@ -931,7 +923,7 @@ def vad_speech(frame: np.ndarray) -> int | None:
             _webrtcvad.set_mode(handle, VAD_LEVEL)
             _vad = (_webrtcvad, handle)
         except Exception as e:            # noqa: BLE001 - any failure means "no detector"
-            log(f"детектор речи не поднялся, остаюсь на громкости: {e}")
+            log(f"speech detector would not load, staying on loudness alone: {e}")
             _vad = False
     if _vad is False:
         return None
@@ -952,11 +944,11 @@ def strip_wake(text: str) -> str:
     """Drop a leading wake word so only the command is left."""
     words = text.split()
     while words:
-        bare = re.sub(r"[^а-яёa-z]", "", words[0].lower())
+        bare = LANG.strip_re.sub("", words[0].lower())
         if bare and any(bare.startswith(v[:5]) for v in WAKE_VARIANTS):
             words.pop(0)
             continue
-        if bare in {"эй", "hey", "hi"} and len(words) > 1:
+        if bare in LANG.greetings and len(words) > 1:
             words.pop(0)
             continue
         break
@@ -966,21 +958,24 @@ def strip_wake(text: str) -> str:
 def split_forward(command: str) -> tuple[str, str, str, str]:
     """Explicit addressing: ("ask"|"tell"|"", room id, task, the wording used).
 
-    The wording comes back so the caller can tell an order ("передай шефу ...")
-    from a bare name ("шеф ..."): only an order outranks the automatic routes.
+    The wording comes back so the caller can tell an order ("ask the chief ...")
+    from a bare name ("chief ..."): only an order outranks the automatic routes.
     The words themselves are in config/rooms.toml, one list per room.
     """
     return CFG.address(command)
 
 
-# the owner speaks Russian. On music and room noise parakeet hallucinates fluent
-# English ("I think that's a good thing." from 1.6 s of silence in the log of
-# 20.08), so a transcript without a single Russian letter is noise, not a command.
-CYRILLIC = re.compile(r"[а-яё]", re.IGNORECASE)
+# On music and room noise the transcriber hallucinates fluent sentences - "I
+# think that's a good thing." came out of 1.6 s of silence in the log of 20.08.
+# A transcript with none of the locale's own letters in it is noise, not a
+# command. For English that check is nearly free; for Russian it throws out every
+# such hallucination, since they arrive in English.
+def in_locale(text: str) -> bool:
+    return bool(LANG.script_re.search(text))
 
 
 def normalize(text: str) -> str:
-    return " ".join(re.sub(r"[^а-яёa-z ]", "", text.lower()).split())
+    return " ".join(LANG.strip_re.sub("", text.lower()).split())
 
 
 
@@ -1020,11 +1015,11 @@ def media_follow(state: str) -> None:
                 if paused:
                     global _media_paused_at
                     _media_paused_at = time.monotonic()
-                    log(f"музыка на паузе: {', '.join(paused)}")
+                    log(f"music paused: {', '.join(paused)}")
             else:
                 back = media.resume()
                 if back:
-                    log(f"музыка снова играет: {', '.join(back)}")
+                    log(f"music playing again: {', '.join(back)}")
         except Exception as e:
             log(f"media control failed: {e}")
 
@@ -1101,7 +1096,7 @@ class Trigger:
         self._by_key = by_key
 
     def escape(self) -> None:
-        """Same as a double tap: shut up and wait, still listening for "Джарвис".
+        """Same as a double tap: shut up and wait, still listening for the name.
 
         Does nothing while idle on purpose - Escape is pressed constantly in
         editors, and reacting to every one of those would be unusable.
@@ -1196,7 +1191,10 @@ class Trigger:
 # --- wake engines -----------------------------------------------------------
 
 class VoskEngine:
-    """Offline Russian ASR used as a wake word spotter. Native "Джарвис"."""
+    """Offline ASR used as a wake word spotter. Hears the real name, natively.
+
+    Which model, and therefore which language, comes from the locale.
+    """
     frame_len = 2000  # 125 ms
 
     def __init__(self):
@@ -1204,16 +1202,15 @@ class VoskEngine:
         SetLogLevel(-1)
         path = os.environ.get(
             "JARVIS_VOSK_MODEL",
-            os.path.join(JARVIS_DIR, "models", "vosk-model-small-ru-0.22"),
+            os.path.join(JARVIS_DIR, "models", LANG.wake_model),
         )
         if not os.path.isdir(path):
             sys.exit(f"Vosk model not found: {path}\n"
-                     "Download: https://alphacephei.com/vosk/models/"
-                     "vosk-model-small-ru-0.22.zip")
+                     f"Download: {LANG.wake_model_url}")
         self._KaldiRecognizer = KaldiRecognizer
         self.model = Model(path)
-        # A wake spotter only ever needs to hear one word. With the whole Russian
-        # dictionary open, "Джарвис" competes with every other word in it, and
+        # A wake spotter only ever needs to hear one word. With the whole
+        # dictionary open, the name competes with every other word in it, and
         # song lyrics win that competition often enough that he has to call
         # twice. A grammar leaves the recognizer nothing else it can print: the
         # name, or "[unk]" for everything else.
@@ -1221,8 +1218,8 @@ class VoskEngine:
                                    ensure_ascii=False)
                         if WAKE_GRAMMAR and WAKE_GRAMMAR_WORDS else None)
         self.rec = self._new_rec()
-        self.name = (f"vosk ({os.path.basename(path)}) - слово «Джарвис»"
-                     + (", словарь только из имени" if self.grammar else ""))
+        self.name = (f"vosk ({os.path.basename(path)}) - the word {LANG.name!r}"
+                     + (", name-only dictionary" if self.grammar else ""))
 
     def _new_rec(self):
         """Fails open: a model without a dynamic graph gets the old recognizer."""
@@ -1231,8 +1228,8 @@ class VoskEngine:
                 return self._KaldiRecognizer(self.model, SAMPLE_RATE,
                                              self.grammar)
             except Exception as e:
-                log("грамматику слова-будильника модель не приняла, "
-                    f"слушаю полным словарём: {e}")
+                log("the model would not take the wake-word grammar, "
+                    f"listening with the full dictionary: {e}")
                 self.grammar = None
         return self._KaldiRecognizer(self.model, SAMPLE_RATE)
 
@@ -1243,7 +1240,7 @@ class VoskEngine:
             if text:
                 # every finished phrase goes to the log file: this is the only way
                 # to answer "I called him three times and he did not hear me"
-                log_quiet(f"расслышал: {text!r}")
+                log_quiet(f"made out: {text!r}")
                 if DEBUG:
                     log(f"vosk: {text!r}")
         else:
@@ -1339,8 +1336,8 @@ def flush(audio_q: "queue.Queue[np.ndarray]") -> None:
         audio_q.get_nowait()
 
 
-_voiced_audio = None     # речевая часть последней записи, для сверки голоса
-_voiced_at = 0.0         # когда её положили - старую не берём
+_voiced_audio = None     # the spoken part of the last take, for the voice check
+_voiced_at = 0.0         # when it was put there - a stale one is not used
 # How the last take ended, and whether the music was still playing inside it.
 # Both are reasons not to judge the voice on that audio - see capture().
 _last_end_reason = ""
@@ -1365,7 +1362,7 @@ def live_speaker(window: list) -> bool | None:
             return None
         ok, score, why = voiceprint.check(audio)
     except Exception as e:
-        trace(f"живая сверка голоса пропущена: {e}")
+        trace(f"live voice check skipped: {e}")
         return None
     if why in ("off", "no profile") or why.startswith("too short"):
         return None
@@ -1391,10 +1388,10 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
                      noise_floor * CONTINUE_FLOOR, CONTINUE_MIN_LEVEL)
     floor_est = noise_floor         # the room as it is right now, not as it was
     levels: list[int] = []          # one number per 125 ms frame, for the trace
-    trace(f"запись НАЧАЛАСЬ: keep_head={keep_head} ждать речь {wait_sec:.1f}с "
-          f"пауза {tuned('silence_sec', SILENCE_SEC):.1f}с "
-          f"планка старта {silence_limit:.0f} планка продолжения {keep_limit:.0f} "
-          f"шум {noise_floor:.0f}")
+    trace(f"recording STARTED: keep_head={keep_head} wait for speech {wait_sec:.1f}s "
+          f"end pause {tuned('silence_sec', SILENCE_SEC):.1f}s "
+          f"start level {silence_limit:.0f} keep level {keep_limit:.0f} "
+          f"noise {noise_floor:.0f}")
     frames: list[np.ndarray] = []
     trigger.stop.clear()
     trigger.set_state(trigger.LISTENING)
@@ -1403,28 +1400,28 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
         grace = wait_sec
         heard_speech = False
         loud_frames = 0
-        run = 0                 # громких кадров подряд, см. KEEP_RUN_FRAMES
-        resumed = False         # была ли уже пауза, после которой он продолжил
-        pause_peak = 0.0        # самая длинная пауза внутри этой записи
-        vad_frames = 0          # кадров, где детектор набрал VAD_MIN_SUB и больше
-        vad_used = False        # он вообще отвечал, или мы весь раз на громкости
-        vad_hist = [0] * 13     # сколько кадров дали 0, 1, ... 12 голосовых подкадров
-        vad_seq: list[int] = []  # вердикт по каждому кадру - по нему подбирается порог
+        run = 0                 # loud frames in a row, see KEEP_RUN_FRAMES
+        resumed = False         # was there already a pause he carried on through
+        pause_peak = 0.0        # the longest pause inside this take
+        vad_frames = 0          # frames where the detector reached VAD_MIN_SUB or more
+        vad_used = False        # did it answer at all, or was this take loudness only
+        vad_hist = [0] * 13     # how many frames gave 0, 1, ... 12 voiced sub-frames
+        vad_seq: list[int] = []  # verdict per frame - the threshold is tuned from it
         vad_win: collections.deque = collections.deque(maxlen=VAD_WIN_FRAMES)
         # frames are 80-125 ms depending on the wake engine, so the window is
         # trimmed by samples inside live_speaker, not by a frame count here
         spk_win: collections.deque = collections.deque(maxlen=32)
-        voiced: list[np.ndarray] = []   # только кадры, где что-то звучало
-        voiced_seen = 0                 # их счётчик, по нему шаг сверки
-        spk_strikes = 0         # подряд окон, где голос не его
-        spk_checks = 0          # сколько раз вообще спросили
-        spk_his = 0             # из них ответов «его голос»
-        spk_muted = False       # последнее слово сверки: сейчас говорит не он
+        voiced: list[np.ndarray] = []   # only the frames where something sounded
+        voiced_seen = 0                 # their count, which paces the voice check
+        spk_strikes = 0         # windows in a row where the voice was not his
+        spk_checks = 0          # how many times it was asked at all
+        spk_his = 0             # of those, how many came back "his voice"
+        spk_muted = False       # the check's last word: somebody else is talking
         peak = 0.0
         reason = "cap"
         t0 = time.monotonic()
         # The short cap bounds the *wait* for a voice, not the voice itself: on
-        # 21.08 the 8 s follow-up cap fired at "я сейчас буду шуметь" while the owner
+        # 21.08 the 8 s follow-up cap fired mid-sentence while the owner
         # was still mid-sentence. Once a phrase is really under way, the long cap
         # takes over and the phrase is allowed to finish.
         while time.monotonic() - t0 < (MAX_UTTERANCE_SEC if heard_speech else max_sec):
@@ -1451,7 +1448,7 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
                                  floor_est * CONTINUE_FLOOR, CONTINUE_MIN_LEVEL)
             # a phrase in progress is held by the lower bar
             if LISTEN_ONLY and os.path.exists(SPEAK_LOCK):
-                trace("во время записи появился замок озвучки - говорю сам")
+                trace("a speech lock appeared mid-recording - someone else is talking")
                 # The agent started speaking while we were recording. Anything
                 # after this point is its own voice - but what the owner had already
                 # said is his, and throwing it away looked like "he cut me off".
@@ -1498,8 +1495,8 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
                         spk_strikes += 1
                         if spk_strikes >= LIVE_SPK_STRIKES and not spk_muted:
                             spk_muted = True
-                            trace(f"живая сверка: голос не его "
-                                  f"({spk_strikes} окна подряд) - считаю тишиной")
+                            trace(f"live check: not his voice "
+                                  f"({spk_strikes} windows running) - counting as silence")
             hits = vad_speech(frame)
             voice = None
             if hits is not None:
@@ -1559,24 +1556,24 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
         log(f"record end: {reason}, peak {peak:.0f}, start {silence_limit:.0f}, "
             f"keep {keep_limit:.0f}, noise floor {noise_floor:.0f}, "
             f"loud frames {loud_frames}, speech {'yes' if heard_speech else 'NO'}"
-            + (f", думал вслух (пауза до {pause_peak:.1f}с, ждал {SILENCE_MID}с)"
+            + (f", thought out loud (pause up to {pause_peak:.1f}s, waited {SILENCE_MID}s)"
                if resumed else "")
             + (f", vad frames {vad_frames}/{len(levels)}" if vad_used
                else ", vad OFF")
-            + (f", его голос {spk_his}/{spk_checks} окон" if spk_checks
-               else (", живая сверка не спрашивалась" if LIVE_SPK else "")))
+            + (f", his voice in {spk_his}/{spk_checks} windows" if spk_checks
+               else (", live check never asked" if LIVE_SPK else "")))
         if vad_used:
-            trace("детектор, сколько кадров дали столько голосовых подкадров из 12: "
+            trace("detector, frames per count of voiced sub-frames out of 12: "
                   + " ".join(f"{n}:{c}" for n, c in enumerate(vad_hist) if c))
-            trace("детектор по кадрам (голосовых подкадров из 12): "
+            trace("detector frame by frame (voiced sub-frames out of 12): "
                   + " ".join(str(v) for v in vad_seq[-240:]))
-        trace(f"планки в конце: старт {silence_limit:.0f} продолжение {keep_limit:.0f} "
-              f"(по пику фразы {peak * FAR_KEEP_SHARE:.0f}) "
-              f"шум по ходу записи {floor_est:.0f}")
-        trace(f"запись КОНЧИЛАСЬ: причина={reason} длилась {time.monotonic() - t0:.1f}с "
-              f"тишины в конце {silent_for:.1f}с речь={'да' if heard_speech else 'НЕТ'} "
-              f"громких кадров {loud_frames} пик {peak:.0f}")
-        trace("уровни по кадрам (125 мс каждый): " + " ".join(str(v) for v in levels[-240:]))
+        trace(f"levels at the end: start {silence_limit:.0f} keep {keep_limit:.0f} "
+              f"(from phrase peak {peak * FAR_KEEP_SHARE:.0f}) "
+              f"noise during the take {floor_est:.0f}")
+        trace(f"recording ENDED: reason={reason} lasted {time.monotonic() - t0:.1f}s "
+              f"trailing silence {silent_for:.1f}s speech={'yes' if heard_speech else 'NO'} "
+              f"loud frames {loud_frames} peak {peak:.0f}")
+        trace("levels frame by frame (125 ms each): " + " ".join(str(v) for v in levels[-240:]))
         global _last_end_reason, _music_in_take
         _last_end_reason = reason
         # The music is silenced in a background thread, so the first part of a
@@ -1584,7 +1581,7 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
         # went quiet: later than t0 means part of this take has music in it.
         _music_in_take = bool(_media_paused_at and _media_paused_at > t0)
         if not heard_speech or not frames:
-            trace("взято НИЧЕГО: речи не было или кадры пусты")
+            trace("kept NOTHING: no speech, or the frames were empty")
             return None
         audio = np.concatenate(frames)
         # The final check gets the same diet as the live one: speech without the
@@ -1598,7 +1595,7 @@ def record(audio_q, noise_floor: float, trigger: Trigger,
             _voiced_audio = None
         if len(audio) / SAMPLE_RATE - silent_for < MIN_UTTERANCE_SEC:
             log("too short, ignoring")
-            trace(f"взято НИЧЕГО: слишком коротко, {len(audio) / SAMPLE_RATE:.1f}с звука")
+            trace(f"kept NOTHING: too short, {len(audio) / SAMPLE_RATE:.1f}s of audio")
             return None
         return audio
     finally:
@@ -1870,7 +1867,7 @@ def answer_from_pane(pane: str, before: str, question: str) -> str:
     and trims its scrollback, so `pane` often does not start with what was there
     when we typed. Without an anchor we return nothing and keep waiting - taking
     the whole pane instead is what made the watcher read the login banner and
-    announce "это оболочка, а не ответ" (лог 20.08, 09:12:17).
+    announce it as the shell rather than an answer (log of 20.08, 09:12:17).
     """
     last = None
     for last in anchor_re(question).finditer(pane):
@@ -1983,9 +1980,9 @@ class Speaker:
             line = line.strip()
             if line == "!SPEAKING":
                 if TURN.get("answer_queued"):
-                    turn_mark("первый звук ответа")
+                    turn_mark("first sound of the answer")
                 else:
-                    turn_mark("первый звук подтверждения")
+                    turn_mark("first sound of the acknowledgement")
             elif line == "!DONE":
                 self._done_one()
             elif line.startswith("!ERR"):
@@ -2093,7 +2090,7 @@ class Orchestrator:
     """
 
     def __init__(self, trigger: Trigger, speaker: Speaker,
-                 work_dir: str = ORCH_DIR, label: str = "оркестратор",
+                 work_dir: str = ORCH_DIR, label: str = "room",
                  peer_name: str = ""):
         self.trigger = trigger
         self.speaker = speaker
@@ -2126,7 +2123,7 @@ class Orchestrator:
         with self.busy:
             if not self.available():
                 log(f"{self.label}: window not found "
-                    f"(имя {self.name!r}, папка {self.dir!r})")
+                    f"(session {self.name!r}, dir {self.dir!r})")
                 return ""
             self.trigger.set_state(self.trigger.THINKING)
             t0 = time.monotonic()
@@ -2163,7 +2160,7 @@ class Orchestrator:
         with self.busy:
             if not self.available():
                 log(f"{self.label}: window not found "
-                    f"(имя {self.name!r}, папка {self.dir!r})")
+                    f"(session {self.name!r}, dir {self.dir!r})")
                 return False
             before = orch_pane(self.wid)
             type_into(self.wid, text)
@@ -2184,7 +2181,7 @@ class AgentWatch:
     # the agent starts writing - so an answer is never accepted earlier than this
     MIN_WAIT_SEC = 4.0
     # An agent can answer in instalments. Relaying through the chef gives
-    # "отправил задание, жду сводку" first and the numbers half a minute later,
+    # "sent the task, waiting for the summary" first and the numbers later,
     # when the peer replies - and in between the screen is genuinely idle, so
     # "stable for a moment" does not mean "done". The subscription therefore
     # stays on, speaking every new piece, until this much quiet has passed.
@@ -2206,7 +2203,7 @@ class AgentWatch:
                                "before": before, "last": before,
                                "since": now, "t0": now, "moved": False,
                                "spoken": "", "spoke_at": 0.0})
-        log(f"{agent.label}: вопрос отправлен, слушаю окно {wid}")
+        log(f"{agent.label}: question sent, watching window {wid}")
 
     def waiting_for(self) -> list[str]:
         with self.lock:
@@ -2233,7 +2230,7 @@ class AgentWatch:
         pane = orch_pane(it["wid"])
         waited = time.monotonic() - it["t0"]
         if not pane:  # the window was closed
-            log(f"{it['agent'].label}: окно закрылось, ответа не будет")
+            log(f"{it['agent'].label}: the window closed, no answer is coming")
             self._drop(it)
             return
         if pane != it["last"]:
@@ -2242,13 +2239,13 @@ class AgentWatch:
         if it["spoken"]:
             # already said something: wait a while for a follow-up, then let go
             if time.monotonic() - it["spoke_at"] > self.QUIET_AFTER_ANSWER_SEC:
-                log(f"{it['agent'].label}: тишина после ответа, снимаю с прослушки")
+                log(f"{it['agent'].label}: quiet after the answer, no longer watching")
                 self._drop(it)
                 return
         elif waited > CLAUDE_TIMEOUT_SEC:
-            log(f"{it['agent'].label}: молчит {waited:.0f}s, перестаю ждать")
+            log(f"{it['agent'].label}: silent for {waited:.0f}s, no longer waiting")
             self._drop(it)
-            self.speaker.say(f"{it['agent'].label} так и не ответил.")
+            self.speaker.say(LANG.say("room_silent", label=it["agent"].label))
             return
         if not it["moved"] or waited < self.MIN_WAIT_SEC:
             return
@@ -2258,7 +2255,7 @@ class AgentWatch:
         if not answer:
             return  # the screen just paused, he is still working
         if looks_like_shell(answer):
-            log(f"{it['agent'].label}: это оболочка, а не ответ")
+            log(f"{it['agent'].label}: that is the shell, not an answer")
             self._drop(it)
             it["agent"].wid = ""
             return
@@ -2268,9 +2265,9 @@ class AgentWatch:
         if len(fresh.strip()) < self.MIN_NEW_CHARS:
             return
         it["spoken"], it["spoke_at"] = answer, time.monotonic()
-        log(f"{it['agent'].label} ответил через {waited:.0f}s: {fresh[:150]!r}")
+        log(f"{it['agent'].label} answered after {waited:.0f}s: {fresh[:150]!r}")
         self.trigger.set_state(self.trigger.SPEAKING)
-        self.speaker.say(f"{it['agent'].label} отвечает.")
+        self.speaker.say(LANG.say("room_answering", label=it["agent"].label))
         for chunk in orch_chunks(fresh.strip()):
             self.speaker.say(chunk)
 
@@ -2366,13 +2363,23 @@ class LiveSession:
 
     def exchange(self, text: str, source: str = "voice") -> str | None:
         """Ask, speak the answer as it arrives. None means interrupted."""
+        # Long-term memory goes in front of the question, never in the system
+        # prompt: it is about this question, and the session is reused.
+        asked = text
+        if MEM.available():
+            t_mem = time.monotonic()
+            facts = memory_mod.recall(MEM, text, JARVIS_DIR_PATH, log)
+            if facts:
+                text = memory_mod.wrap(MEM, text, facts)
+                log(f"memory: {len(facts)} chars recalled in "
+                    f"{time.monotonic() - t_mem:.2f}s")
         with self.busy:
             if not self._alive():
                 log("claude session is down, starting a new one")
                 self.sid = str(uuid.uuid4())
                 self.start()
                 if not self._alive():
-                    self.speaker.say("Сессия Клода не поднялась, посмотри лог.")
+                    self.speaker.say(LANG.say("session_down"))
                     return ""
             self._drain()
             msg = {"type": "user",
@@ -2411,7 +2418,7 @@ class LiveSession:
                 if chunk:
                     if not spoken:
                         TURN["answer_queued"] = True
-                        turn_mark("клод ответил первым куском")
+                        turn_mark("claude returned the first chunk")
                         log(f"first chunk after {time.monotonic() - t0:.1f}s "
                             f"({source}): {chunk!r}")
                         spoken = True
@@ -2422,6 +2429,10 @@ class LiveSession:
                 self.speaker.say(buf.strip())
             reply = "".join(parts).strip()
             log(f"claude ({time.monotonic() - t0:.1f}s): {reply[:200]!r}")
+            # The store gets the question as it was asked, not the version with
+            # the recalled context bolted on - otherwise every write feeds it
+            # back what it just said.
+            memory_mod.remember(MEM, asked, reply, JARVIS_DIR_PATH, log)
             return reply
 
 
@@ -2441,7 +2452,7 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
     audio = record(audio_q, noise_floor, trigger, keep_head, wait_sec, max_sec)
     if audio is None:
         return None
-    turn_mark("запись закончена")
+    turn_mark("recording finished")
     # Two takes are not worth judging a voice on, and both fail open.
     #
     # Ended by the key: that is his own hand on the "done talking" button, the
@@ -2452,10 +2463,10 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
     # and 0.23 on strangers - a coin toss, and it refused him to his face.
     if verify:
         if _last_end_reason == "key":
-            trace("сверка голоса пропущена: запись оборвана клавишей, это его рука")
+            trace("voice check skipped: the key ended the take, that is his own hand")
             verify = False
         elif _music_in_take:
-            trace("сверка голоса пропущена: в записи ещё играла музыка")
+            trace("voice check skipped: music was still playing during the take")
             verify = False
     if verify and not voice_is_his(audio, speaker, aloud=refuse_aloud):
         return None
@@ -2467,27 +2478,27 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
     text = transcribe(audio, trigger)
     if text is None:
         return None
-    turn_mark("фраза распознана")
+    turn_mark("phrase transcribed")
     log(f"heard ({secs:.1f}s audio, {time.monotonic() - t0:.1f}s ASR): {text!r}")
     if speaker is not None and speaker.is_echo(text):
         return None
-    if text and not CYRILLIC.search(text):
-        log(f"not Russian, treating as noise: {text!r}")
+    if text and not in_locale(text):
+        log(f"not {LANG.lang}, treating as noise: {text!r}")
         return None
     return text
 
 
 def hear_after_wake_only(audio_q, noise_floor: float, trigger: Trigger, engine,
                          speaker=None) -> str | None:
-    """He said just "Джарвис": prompt, then record the command itself.
+    """He said just the name: prompt, then record the command itself.
 
     Shared by both modes on purpose - the assistant and the listener must behave
     the same, so a fix here lands in both. The only difference is the prompt:
-    Jarvis says "Слушаю", the listener only clicks, because in listen-only mode
-    the answering voice belongs to the agent.
+    Jarvis says the locale's `listening` line, the listener only clicks, because
+    in listen-only mode the answering voice belongs to the agent.
     """
     if speaker is not None:
-        speaker.say("Слушаю.")
+        speaker.say(LANG.listening)
         speaker.wait()
         speaker.settle()
     else:
@@ -2508,7 +2519,7 @@ def hear_after_wake_only(audio_q, noise_floor: float, trigger: Trigger, engine,
 # and speaks with the voice-answer skill.
 SPEAK_LOCK = os.path.expanduser("~/.claude/tts-cache/.speak.lock")
 # During a call the wake word must not work at all. Anyone on the other side can
-# say "Джарвис" and start a recording in the owner's room - and whatever they say next
+# say the name and start a recording in the owner's room - and whatever they say next
 # goes to an agent with his tools. The existing call_guard.sh answers a different
 # question, "may I speak out loud", and lets a call through on headphones; this one
 # is about hearing, and headphones do not help - the voice comes out of them into
@@ -2553,10 +2564,10 @@ def in_call() -> bool:
             busy = subprocess.run(["/usr/bin/pgrep", "-x", "zoom.us"],
                                   capture_output=True, timeout=3).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
-        busy = _call_state["in_call"]      # не смогли проверить - оставляем как было
+        busy = _call_state["in_call"]      # could not check - leave it as it was
     if busy != _call_state["in_call"]:
-        log("созвон начался - слово «Джарвис» не слушаю" if busy
-            else "созвон кончился - слово «Джарвис» снова работает")
+        log("call started - not listening for the name" if busy
+            else "call ended - listening for the name again")
     _call_state["in_call"] = busy
     return busy
 
@@ -2565,25 +2576,26 @@ LISTENER_PID = os.path.join(JARVIS_DIR, "listener.pid")
 LISTENER_OWNER = os.path.join(JARVIS_DIR, "listener.owner")
 # The badge used to ask `pgrep -f jarvis_daemon.py` whether Jarvis is alive, and
 # that matches any command line merely mentioning the file - including the check
-# itself and the /assist-off kill loop. The badge then flashed a stale "слушаю"
+# itself and the /assist-off kill loop. The badge then flashed a stale "listening"
 # for one tick. Pid files answer the same question without guessing.
 DAEMON_PID = os.path.join(JARVIS_DIR, "daemon.pid")
 # The badge and the menu bar icon read the state file, so listen-only mode keeps
-# it honest as well: "думаю" from the moment a phrase is handed to the agent,
-# "говорю" while the voice-answer skill holds its lock, "жду" the rest of the
-# time. Without this the badge only ever showed "жду" and "слушаю".
+# it honest as well: "thinking" from the moment a phrase is handed to the agent,
+# "talking" while the voice-answer skill holds its lock, "waiting" the rest of
+# the time. Without this the badge only ever showed "waiting" and "listening".
 #
-# 40 s, а не 300: снимать «думаю» умеет либо начало озвучки, либо answered.sh,
-# и агент про второе забывает - 22.08 плашка врала трижды за день, каждый раз
-# когда ответ был текстом без голоса. Пять минут делали из этого пять минут лжи.
-# Сорок секунд - примерно вдвое дольше типичного ответа, так что честное «думаю»
-# они не обрежут, а забытое погаснет быстро. При долгой работе агент всё равно
-# обязан сказать голосом, что взялся, - там плашка не главный сигнал.
+# 40 s and not 300: "thinking" is cleared either by speech starting or by
+# answered.sh, and agents forget the second one - on 22.08 the badge lied three
+# times in a day, every time the answer was text with no voice. Five minutes of
+# timeout made that five minutes of lying. Forty seconds is about twice a typical
+# answer, so an honest "thinking" is not cut short while a forgotten one fades
+# fast. On genuinely long work the agent is supposed to say out loud that it
+# started, and the badge is not the main signal there anyway.
 THINK_MAX_SEC = float(os.environ.get("JARVIS_THINK_MAX", "40"))
 
 
 SPEAK_STOP = os.path.join(JARVIS_DIR, "speak.stop")
-# The agent touches this when an answer is finished. Without it "думаю" could only
+# The agent touches this when an answer is finished. Without it "thinking" could only
 # be cleared by the start of speech, so a text-only answer left the badge stuck
 # until the five-minute timeout.
 ANSWER_DONE = os.path.join(JARVIS_DIR, "answer.done")
@@ -2692,7 +2704,7 @@ def listen_only_main() -> None:
     LOG_STREAM = sys.stderr
     busy = listener_busy()
     if busy:
-        print(f"BUSY: слушает уже другой процесс, pid {busy}", flush=True)
+        print(f"BUSY: another process already holds the microphone, pid {busy}", flush=True)
         return
     apply_keymap()
     warm_voiceprint()
@@ -2709,14 +2721,15 @@ def listen_only_main() -> None:
     audio_q: "queue.Queue[np.ndarray]" = queue.Queue()
 
     noise_floor = 100.0
-    print(f"LISTENING: слушаю «Джарвис»"
-          f"{f' для сессии «{owner}»' if owner else ''} ({engine.name})", flush=True)
+    print(f"LISTENING: waiting for {LANG.name!r}"
+          f"{f' on behalf of session {owner!r}' if owner else ''} ({engine.name})",
+          flush=True)
     try:
         with Mic(engine, audio_q).open_ctx():
-            pending = 0.0   # когда фраза ушла агенту и он над ней работает
-            pending_wall = 0.0  # то же время по стенным часам, для файла-сигнала
-            listen_now = 0.0  # >0: слушаем без слова-будильника столько секунд
-            spoke_until = 0.0  # до этого момента слышно эхо своего же ответа
+            pending = 0.0       # when a phrase went to an agent still working on it
+            pending_wall = 0.0  # the same moment on the wall clock, for the flag file
+            listen_now = 0.0   # >0: listen without the wake word for this many seconds
+            spoke_until = 0.0  # until this moment the mic still hears our own answer
             while True:
                 if locked_pause(trigger, audio_q, engine):
                     pending = pending_wall = listen_now = 0.0
@@ -2751,9 +2764,9 @@ def listen_only_main() -> None:
                 if os.path.exists(SPEAK_LOCK):
                     if trigger.state != trigger.SPEAKING:
                         trigger.set_state(trigger.SPEAKING)
-                        trace("агент заговорил - замок озвучки на месте, слушать нельзя")
+                        trace("the agent started talking - its speech lock is held, cannot listen")
                     pending = 0.0
-                    listen_now = FOLLOWUP_SEC  # он договорит - и мы слушаем дальше
+                    listen_now = FOLLOWUP_SEC  # once it finishes, keep listening
                     spoke_until = time.monotonic() + ECHO_SETTLE_SEC
                     next_frame(audio_q)
                     continue
@@ -2767,10 +2780,10 @@ def listen_only_main() -> None:
                     spoke_until = 0.0
                     flush(audio_q)      # whatever the room recorded while he spoke
                     engine.reset()
-                    trace("агент договорил, эхо осело - дальше слушаю без слова-будильника")
+                    trace("the agent finished, echo settled - listening on without the wake word")
                 if listen_now:
                     wait_sec, listen_now = listen_now, 0.0
-                    trace(f"дослушивание: жду ответ {wait_sec:.1f}с, слово-будильник не нужно")
+                    trace(f"follow-up: waiting {wait_sec:.1f}s, no wake word needed")
                     flush(audio_q)
                     chime()
                     text = capture(audio_q, noise_floor, trigger,
@@ -2779,16 +2792,16 @@ def listen_only_main() -> None:
                                    refuse_aloud=False)
                     engine.reset()
                     command = strip_wake(text or "")
-                    trace(f"после дослушивания распознано: {text!r}")
+                    trace(f"follow-up transcribed: {text!r}")
                     if command and normalize(command) not in STOP_WORDS:
                         print(f"HEARD: {command}", flush=True)
                         pending = time.monotonic()
                         pending_wall = time.time()
                     continue
                 if pending and answered_at() > pending_wall:
-                    pending = 0.0  # агент сказал, что ответил - «думаю» больше не про него
+                    pending = 0.0  # the agent says it answered - "thinking" is no longer about it
                 if pending and time.monotonic() - pending > THINK_MAX_SEC:
-                    pending = 0.0  # молчит слишком долго, снимаем «думаю»
+                    pending = 0.0  # silent too long, drop "thinking"
                 want = trigger.THINKING if pending else trigger.IDLE
                 if trigger.state != want:
                     trigger.set_state(want)
@@ -2807,7 +2820,7 @@ def listen_only_main() -> None:
                 trigger.start.clear()
                 trigger.mark_wake_source(hot)
                 log("hotkey!" if hot else "wake!")
-                trace("ПРОБУЖДЕНИЕ: " + ("клавиша" if hot else "услышал слово «Джарвис»"))
+                trace("WOKE: " + ("key press" if hot else "heard the name"))
                 turn_start()
                 chime()
                 text = capture(audio_q, noise_floor, trigger,
@@ -2864,7 +2877,7 @@ def main() -> None:
         """
         out = plugins.run_action(action, phrase, JARVIS_DIR_PATH, log)
         if out is None or (action.speak == "retell" and not out):
-            speaker.say(action.fail_say or "Не получилось.")
+            speaker.say(action.fail_say or LANG.say("action_failed"))
             return None
         if action.speak == "retell":
             return plugins.fill(action.prompt, q=phrase, facts=out)
@@ -2883,8 +2896,8 @@ def main() -> None:
         if room is None or dest is None:
             return False
         if dest.send_and_watch(VOICE_ASK.format(q=question), watch):
-            speaker.say(plugins.fill(room.ack_ask or "Спросил {label}.",
-                                     label=room.label))
+            speaker.say(plugins.fill(room.ack_ask, label=room.label)
+                        if room.ack_ask else LANG.say("ask_ack", label=room.label))
             return True
         # the session is up but has no window of its own - started inside
         # another Claude session, or in an IDE pane - so a room that can reach
@@ -2894,21 +2907,22 @@ def main() -> None:
                 and session_alive(room.env_session())
                 and relay.send_and_watch(
                     RELAY_ASK.format(peer=room.env_session(), q=question), watch)):
-            speaker.say(plugins.fill(
-                room.ack_relay or "{label} не в окне терминала, спрошу через {relay}.",
-                label=room.label, relay=CFG.room(room.relay_via).label))
+            names = dict(label=room.label, relay=CFG.room(room.relay_via).label)
+            speaker.say(plugins.fill(room.ack_relay, **names) if room.ack_relay
+                        else LANG.say("room_relay", **names))
             return True
         spare = rooms.get(room.fallback)
         if spare is not None and spare.send_and_watch(
                 VOICE_ASK.format(q=question), watch):
-            speaker.say(plugins.fill(
-                room.ack_fallback or "{label} не нашёл, спросил {fallback}.",
-                label=room.label, fallback=CFG.room(room.fallback).label))
+            names = dict(label=room.label, fallback=CFG.room(room.fallback).label)
+            speaker.say(plugins.fill(room.ack_fallback, **names) if room.ack_fallback
+                        else LANG.say("room_fallback", **names))
             return True
-        speaker.say(plugins.fill(room.ack_missing or "Окно {label} не найдено.",
-                                 label=room.label,
-                                 fallback=(CFG.room(room.fallback).label
-                                           if CFG.room(room.fallback) else "")))
+        names = dict(label=room.label,
+                     fallback=(CFG.room(room.fallback).label
+                               if CFG.room(room.fallback) else ""))
+        speaker.say(plugins.fill(room.ack_missing, **names) if room.ack_missing
+                    else LANG.say("room_missing", **names))
         return False
     watch = AgentWatch(speaker, trigger)
     # Jarvis answers himself; the orchestrator is reached by asking for it
@@ -2965,8 +2979,9 @@ def main() -> None:
                 reply = rooms[auto].exchange(VOICE_ASK.format(q=text), source="typed")
             elif kind == "tell" and dest is not None and dest.available():
                 dest.send_only(task)
-                reply = plugins.fill(CFG.room(room_id).ack_tell or "Передал {label}.",
-                                     label=CFG.room(room_id).label)
+                room = CFG.room(room_id)
+                reply = (plugins.fill(room.ack_tell, label=room.label)
+                         if room.ack_tell else LANG.say("tell_ack", label=room.label))
             elif kind and dest is not None and dest.available():
                 reply = dest.exchange(task, source="typed")
             else:
@@ -3075,20 +3090,20 @@ def main() -> None:
                 text = hear_after_wake_only(audio_q, noise_floor, trigger, engine,
                                             speaker)
                 if text is None:
-                    log("no command after 'Слушаю', ignoring")
+                    log("no command after the prompt, ignoring")
                     flush(audio_q)
                     continue
                 command = strip_wake(text)
 
             norm = normalize(command)
             if not command:
-                speaker.say("Не расслышал, повтори.")
+                speaker.say(LANG.not_heard)
                 speaker.wait()
                 speaker.settle()
                 flush(audio_q)
                 continue
             if norm in STOP_WORDS:
-                speaker.say("Отбой.")
+                speaker.say(LANG.stopped)
                 speaker.wait()
                 speaker.settle()
                 flush(audio_q)
@@ -3097,8 +3112,8 @@ def main() -> None:
                 if target() is private and private is not None:
                     private.restart()
                 else:
-                    speaker.say("Это окно оркестратора, начни заново командой слэш клеар.")
-                speaker.say("Забыл. Слушаю с чистого листа.")
+                    speaker.say(LANG.reset_elsewhere)
+                speaker.say(LANG.forgotten)
                 speaker.wait()
                 speaker.settle()
                 flush(audio_q)
@@ -3116,13 +3131,12 @@ def main() -> None:
             reaches_agents = bool(kind) or auto_peek in rooms
             if (reaches_agents and FORWARD_NEEDS_KEY and not LISTEN_ONLY
                     and not trigger.woke_by_key()):
-                log("передача другому агенту отклонена - разбудили словом, "
-                    f"не клавишей: {command!r}")
-                speaker.say("Другим агентам передаю только с клавиши. "
-                            "Нажми эм пять и повтори.")
+                log("handing over refused - woke on the name, not the key: "
+                    f"{command!r}")
+                speaker.say(LANG.say("key_only"))
                 trigger.set_state(trigger.IDLE)
                 continue
-            # an order ("передай шефу ...") always wins; a bare name ("шеф ...")
+            # an order ("ask the chief ...") always wins; a bare name ("chief ...")
             # gives way to the automatic routes below
             explicit = bool(kind) and " " in phrase
             auto = "" if explicit else route_auto(norm)
@@ -3150,13 +3164,18 @@ def main() -> None:
             elif kind:
                 room, dest = CFG.room(room_id), rooms.get(room_id)
                 if dest is None:
-                    speaker.say("Такой комнаты нет.")
+                    speaker.say(LANG.say("no_such_room"))
                 elif kind == "tell":
                     log(f"handed to room {room_id!r}: {task!r}")
-                    speaker.say(plugins.fill(
-                        (room.ack_tell or "Передал {label}.") if dest.send_only(task)
-                        else (room.ack_missing or "Окно {label} не найдено."),
-                        label=room.label))
+                    if dest.send_only(task):
+                        line = (plugins.fill(room.ack_tell, label=room.label)
+                                if room.ack_tell
+                                else LANG.say("tell_ack", label=room.label))
+                    else:
+                        line = (plugins.fill(room.ack_missing, label=room.label)
+                                if room.ack_missing
+                                else LANG.say("room_missing", label=room.label))
+                    speaker.say(line)
                 else:
                     log(f"asked room {room_id!r}: {task!r}")
                     room_send(room_id, task)
@@ -3174,7 +3193,7 @@ def main() -> None:
                 follow_up_wait = INTERRUPT_WAIT_SEC
                 continue
             if not reply:
-                speaker.say("Клод не ответил, посмотри лог демона.")
+                speaker.say(LANG.say("no_answer"))
             speaker.wait()      # never open the mic while he is still talking
             speaker.settle()    # speakers still ringing, do not record that
             flush(audio_q)
@@ -3193,7 +3212,7 @@ if __name__ == "__main__":
         eng = make_engine()
         silence = np.zeros(eng.frame_len, dtype=np.int16)
         print(f"selfcheck ok, engine: {eng.name}, detect(silence)={eng.detect(silence)}")
-        print("strip_wake:", repr(strip_wake("Джарвис, сколько будет дважды два?")))
+        print("strip_wake:", repr(strip_wake(f"{LANG.name}, what is two times two?")))
         # The routing examples live next to the room or action they belong to,
         # in config/rooms.toml and config/actions.toml. Add a room, add its
         # examples, and this check covers it without being edited.
@@ -3202,9 +3221,9 @@ if __name__ == "__main__":
         bad = [(q, want, route_auto(normalize(q))) for q, want in cases
                if route_auto(normalize(q)) != want]
         print(f"routing: {len(cases) - len(bad)}/{len(cases)} ok"
-              + ("" if not bad else f", промахи: {bad}"))
+              + ("" if not bad else f", misses: {bad}"))
         # an order must outrank the automatic routes
-        for probe in (f"{w} проверка связи"
+        for probe in (f"{w} radio check"
                       for r in CFG.rooms for w in (r.tell[:1] or r.bare[:1])):
             k, rid, task, phrase = split_forward(probe)
             print(f"forward: {probe!r} -> kind={k!r} room={rid!r} "
@@ -3213,12 +3232,12 @@ if __name__ == "__main__":
             name, folder = room.env_session(), room.env_dir()
             wid = (find_window_by_name(name) if name else "") or (
                 orch_find_window(folder) if folder else "")
-            print(f"комната «{room.id}» (сессия {name or '-'}, папка {folder or '-'}): "
-                  f"{wid or 'окно не найдено'}")
+            print(f"room {room.id!r} (session {name or '-'}, dir {folder or '-'}): "
+                  f"{wid or 'no window found'}")
             for pid in (session_pids(name) if name else []):
-                print(f"  сессия «{name}»: pid {pid}")
+                print(f"  session {name!r}: pid {pid}")
         for action in CFG.actions:
-            print(f"действие «{action.id}»: {action.speak}, {action.run or '-'}")
+            print(f"action {action.id!r}: {action.speak}, {action.run or '-'}")
         print(f"silence={SILENCE_SEC}s followup={FOLLOWUP_SEC}s "
               f"double_tap={DOUBLE_TAP_SEC}s "
               f"tap={os.environ.get('JARVIS_TAP_KEYS', DEFAULT_TAP_KEYS)} "
@@ -3226,7 +3245,7 @@ if __name__ == "__main__":
               f"off={os.environ.get('JARVIS_OFF_KEYS', DEFAULT_OFF_KEYS)}")
         sys.exit(0)
     # SIGTERM without a handler skips every finally block, so a killed listener
-    # left the state file on "слушаю" and the badge kept showing it
+    # left the state file on "listening" and the badge kept showing it
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         listen_only_main() if "--listen" in sys.argv else main()
@@ -3237,8 +3256,8 @@ if __name__ == "__main__":
         for worker in ("tts_worker.py", "vosk_worker.py"):
             subprocess.run(["pkill", "-f", worker], capture_output=True)
         subprocess.run(["pkill", "-f", "asr_worker.py"], capture_output=True)
-        # Только своё: выход по BUSY (микрофон уже занят другой сессией) не должен
-        # ни удалять её pid-файл, ни гасить её индикацию.
+        # Only our own: a BUSY exit (the microphone is already held by another
+        # session) must not delete its pid file or clear its indicator.
         def owned(path: str) -> bool:
             try:
                 return pathlib.Path(path).read_text().strip() == str(os.getpid())

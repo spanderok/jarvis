@@ -80,34 +80,34 @@ def test_no_two_rooms_share_a_wording(registry):
 # --------------------------------------------------------------------------
 
 def test_an_order_names_its_room_and_keeps_the_task(registry):
-    kind, room, task, phrase = registry.address("передай шефу выкати демо")
-    assert (kind, room, task) == ("tell", "chief", "выкати демо")
+    kind, room, task, phrase = registry.address("tell the chief to ship the demo")
+    assert (kind, room, task) == ("tell", "chief", "to ship the demo")
     assert " " in phrase, "an order must be recognisable as explicit"
 
 
 def test_asking_waits_and_telling_does_not(registry):
-    assert registry.address("спроси шефа что там с ревью")[0] == "ask"
-    assert registry.address("передай шефу выкати демо")[0] == "tell"
+    assert registry.address("ask the chief about the review")[0] == "ask"
+    assert registry.address("tell the chief to ship the demo")[0] == "tell"
 
 
 def test_a_bare_name_is_weaker_than_an_order(registry):
     """It still routes, but `phrase` has no space, which is how the daemon knows."""
-    _, room, task, phrase = registry.address("шеф, посмотри логи")
-    assert (room, task, " " in phrase) == ("chief", "посмотри логи", False)
+    _, room, task, phrase = registry.address("chief, have a look at the logs")
+    assert (room, task, " " in phrase) == ("chief", "have a look at the logs", False)
 
 
 def test_a_hyphen_is_not_a_word_break():
-    """Otherwise "шеф-повар уволился" is an order to the chief."""
+    """Otherwise "chief-of-staff resigned" is an order to the chief."""
     reg = plugins.load(REPO)
-    assert reg.address("шеф-повар уволился") == ("", "", "", "")
+    assert reg.address("chief-of-staff resigned") == ("", "", "", "")
 
 
 def test_a_name_with_nothing_after_it_is_not_an_order(registry):
-    assert registry.address("шеф") == ("", "", "", "")
+    assert registry.address("chief") == ("", "", "", "")
 
 
 def test_a_name_in_the_middle_is_not_an_order(registry):
-    assert registry.address("вчера шеф уехал в отпуск") == ("", "", "", "")
+    assert registry.address("yesterday the chief went on holiday") == ("", "", "", "")
 
 
 # --------------------------------------------------------------------------
@@ -130,7 +130,7 @@ def test_config_order_decides_between_two_rooms(tmp_path):
 
 
 def test_an_unrouted_phrase_goes_nowhere(registry):
-    assert registry.route("сколько будет дважды два") == ""
+    assert registry.route("what is two times two") == ""
 
 
 # --------------------------------------------------------------------------
@@ -319,3 +319,43 @@ def test_env_overrides_one_rooms_session(tmp_path, monkeypatch):
 def test_a_room_dir_is_expanded(tmp_path):
     root = write(tmp_path, rooms='[[room]]\nid = "r"\nwork_dir = "~/somewhere"\n')
     assert not plugins.load(root).rooms[0].env_dir().startswith("~")
+
+
+# --------------------------------------------------------------------------
+# the Russian preset that ships as a drop-in
+# --------------------------------------------------------------------------
+
+def test_the_russian_preset_is_a_working_drop_in(tmp_path, monkeypatch):
+    """It is documentation only until someone copies it, so nothing else runs it.
+
+    A language is meant to be a drop-in rather than a fork, and that claim is
+    only true while this passes.
+    """
+    rooms = tmp_path / "ru-rooms.toml"
+    actions = tmp_path / "ru-actions.toml"
+    rooms.write_text((REPO / "rooms.d" / "ru.example.toml").read_text(encoding="utf-8"),
+                     encoding="utf-8")
+    actions.write_text((REPO / "actions.d" / "ru.example.toml").read_text(encoding="utf-8"),
+                       encoding="utf-8")
+    monkeypatch.setenv("JARVIS_ROOMS", str(rooms))
+    monkeypatch.setenv("JARVIS_ACTIONS", str(actions))
+    reg = plugins.load(REPO)
+
+    kind, room, task, _ = reg.address("передай шефу выкати демо")
+    assert (kind, room, task) == ("tell", "chief", "выкати демо")
+    assert reg.route("сделай погромче") == "music"
+    for source in (*reg.rooms, *reg.actions):
+        for phrase, want in source.examples:
+            assert reg.route(phrase.lower()) == want, phrase
+
+
+def test_the_russian_preset_keeps_the_english_wiring(tmp_path, monkeypatch):
+    """Only the wording is overridden - the launcher and the command are not."""
+    rooms = tmp_path / "ru-rooms.toml"
+    rooms.write_text((REPO / "rooms.d" / "ru.example.toml").read_text(encoding="utf-8"),
+                     encoding="utf-8")
+    monkeypatch.setenv("JARVIS_ROOMS", str(rooms))
+    chief = plugins.load(REPO).room("chief")
+    assert chief.label == "шеф"
+    assert chief.launch == "room.sh chief"      # from config/rooms.toml
+    assert chief.tint == "khaki"

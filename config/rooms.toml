@@ -8,8 +8,9 @@
 # or delete, and a third one is a third row. Your own rooms belong in
 # rooms.d/*.toml, not in this file - it is overwritten by `git pull`.
 #
-# Every string is Russian because that is the language Jarvis hears. Change
-# them all and he addresses rooms in yours; the code holds no vocabulary.
+# The wording is English because that is the default locale. Running him in
+# another language means replacing these lists - rooms.d/ru.example.toml is a
+# complete Russian set of the same two rooms, and shows how far a drop-in goes.
 
 [defaults]
 # Where an unrouted phrase goes. Empty: Jarvis answers it himself, which is
@@ -23,41 +24,40 @@ room = ""
 # ---------------------------------------------------------------------------
 [[room]]
 id = "chief"
-label = "шеф"
-session = "шеф"                  # JARVIS_ROOM_CHIEF_SESSION overrides
-work_dir = "~/claude-orchestrator"   # JARVIS_ROOM_CHIEF_DIR overrides
+label = "the chief"
+session = "chief"                # JARVIS_ROOM_CHIEF_SESSION overrides
+work_dir = "~/projects"          # JARVIS_ROOM_CHIEF_DIR overrides
 launch = "room.sh chief"
 # Reachable from a phone or another machine, not only from this window.
 # Empty: no remote control.
-remote_control = "orchestrator"
+remote_control = "chief"
 # A colour on the window, so two rooms are never mistaken for each other.
 tint = "khaki"
 
 # What Jarvis is told about this room, verbatim, in his system prompt. It lives
 # here and not in the prompt so that renaming the room renames it everywhere.
-hint = """Тяжёлую работу - ревью, правки кода, деплой, разбор тикетов - выполняет \
-рабочий агент, хозяин зовёт его шефом. Если просьба про это, скажи, что передашь, \
-и попроси произнести «передай шефу» с задачей."""
+hint = """The heavy work - reviews, code changes, deploys, ticket work - is done \
+by a working agent the owner calls the chief. If that is what was asked for, say \
+you will pass it on, and ask them to say "tell the chief" with the task."""
 
 # "Ask" waits for the answer and speaks it. "Tell" hands the task over and
 # forgets it - Jarvis says he passed it on and is free for the next question.
-ask = ["спроси шефа", "спроси у шефа", "узнай у шефа",
-       "спроси оркестратора", "спроси у оркестратора", "узнай у оркестратора",
-       "спроси агента", "спроси у агента", "узнай у агента"]
-tell = ["передай шефу", "скажи шефу", "поручи шефу", "пусть шеф",
-        "передай оркестратору", "скажи оркестратору", "поручи оркестратору",
-        "пусть оркестратор",
-        "передай агенту", "скажи агенту", "поручи агенту", "пусть агент"]
+ask = ["ask the chief", "ask chief", "check with the chief",
+       "ask the agent", "ask agent", "check with the agent"]
+tell = ["tell the chief", "pass this to the chief", "have the chief",
+        "get the chief to", "let the chief",
+        "tell the agent", "pass this to the agent", "have the agent",
+        "get the agent to", "let the agent"]
 
 # A bare name counts only at the start of the sentence and as a whole word, so
-# "шеф-повар новый" stays an ordinary question. It is weaker than an order:
-# automatic routes below outrank it, "передай шефу" outranks everything.
-bare = ["шеф", "оркестратор", "агент"]
+# "chief executive resigned" stays an ordinary question. It is weaker than an
+# order: automatic routes below outrank it, "tell the chief" outranks everything.
+bare = ["chief", "agent"]
 bare_kind = "tell"
 
-ack_tell = "Передал шефу."
-ack_ask = "Спросил шефа."
-ack_missing = "Окно шефа не найдено."
+ack_tell = "Passed it to the chief."
+ack_ask = "Asked the chief."
+ack_missing = "No window for the chief."
 
 
 # ---------------------------------------------------------------------------
@@ -69,56 +69,56 @@ ack_missing = "Окно шефа не найдено."
 # ---------------------------------------------------------------------------
 [[room]]
 id = "chat"
-label = "чат"
+label = "the chat agent"
 enabled = false
-session = "чат"
+session = "chat"
 launch = "room.sh chat"
 # A repository with its own CLAUDE.md ignores a role file dropped in the
 # folder, so the role is appended to the system prompt instead.
 role_file = "roles/chat.md"
 tint = "lavender"
-hint = """В чаты ходит отдельный агент, и только по прямой просьбе. Спросили про \
-переписку или непрочитанное - скажи, что сам туда не смотришь, и попроси \
-произнести «посмотри в слаке» с вопросом."""
+hint = """Messages are handled by a separate agent, and only when asked directly. \
+If someone asks about a conversation or unread messages, say you do not look \
+there yourself, and ask them to say "check slack" with the question."""
 
 # Automatic routing: these words send the phrase here from anywhere in the
-# sentence, with no "передай" in front.
+# sentence, with no "tell" in front.
 #
-# Name the thing, never the topic. An early version routed on "непрочитанное",
-# "сводка по чатам" and "кто мне писал", and ordinary questions kept ending up
-# in the chat agent - "что написал Петров" was about a commit. Replaced with
+# Name the thing, never the topic. An early version routed on "unread",
+# "chat summary" and "who messaged me", and ordinary questions kept ending up
+# in the chat agent - "what did Petrov write" was about a commit. Replaced with
 # the product's own name, which nobody says by accident. Put yours here:
-# "слак", "телеграм", "дискорд". A bare "чат" is exactly the mistake described
+# "slack", "telegram", "discord". A bare "chat" is exactly the mistake described
 # above - it is the topic, not the name.
-mention_patterns = ['\bслак\w*']
+mention_patterns = ['\bslack\b']
 
 # When the session is alive but has no Terminal window of its own - started
 # inside another Claude session, or in an IDE pane - Jarvis cannot type into
 # it. This room can, by cross-session message, so the question goes there with
 # instructions to relay it.
 relay_via = "chief"
-ack_relay = "{label} не в окне терминала, спрошу его через {relay}."
+ack_relay = "{label} has no terminal window, I will ask through {relay}."
 
 # When it is not running at all: ask this room instead rather than saying no.
 fallback = "chief"
-ack_fallback = "{label} не нашёл, спросил {fallback}."
-ack_missing = "Ни {label}, ни {fallback} не нашёл."
+ack_fallback = "Could not find {label}, asked {fallback} instead."
+ack_missing = "Found neither {label} nor {fallback}."
 
 # Checked by `jarvis_daemon.py --selfcheck`. `route` is the id this phrase must
 # reach, empty meaning Jarvis answers it himself. Add the questions that must
 # NOT come here - those are the ones a mention word gets wrong.
 [[room.example]]
-phrase = "посмотри в слаке, что написал Петров"
+phrase = "check slack for what Petrov wrote"
 route = "chat"
 [[room.example]]
-phrase = "что там в слаке"
+phrase = "anything new in slack"
 route = "chat"
 [[room.example]]
-phrase = "что написал Петров"
+phrase = "what did Petrov write"
 route = ""
 [[room.example]]
-phrase = "дай сводку по чату"
+phrase = "give me a chat summary"
 route = ""
 [[room.example]]
-phrase = "что по непрочитанным сообщениям"
+phrase = "anything in my unread messages"
 route = ""

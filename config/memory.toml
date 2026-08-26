@@ -1,0 +1,48 @@
+# Long-term memory - a vector store, or anything else that can answer a search.
+#
+# Off until you point it somewhere. Jarvis' own session holds the last ten
+# minutes; this is how he gets at anything older - past decisions, notes,
+# a wiki, a whole Obsidian vault.
+#
+# Two commands, both optional, both plain executables:
+#
+#   recall    gets the question as its one argument, prints context on stdout.
+#             Printing nothing is a normal answer - it means nothing matched.
+#             Runs between the question and the first spoken word, so it is on
+#             a hard clock.
+#
+#   remember  gets the question and the answer as two arguments. Runs detached
+#             after he has already spoken; its output is ignored.
+#
+# Why a command and not a library: Chroma, Qdrant, LanceDB, sqlite-vec, or a
+# grep over a folder of markdown are all a shell script, and none of them
+# becomes a dependency of this repository. It is also the same safety line the
+# actions draw - a fixed route cannot be talked into reading something else.
+#
+# See memory.d/*.example.* for working starting points, and check your own with
+#     python3 memory.py "a question you would ask"
+
+[memory]
+enabled = false
+
+# Relative paths resolve against the repo. A .sh is run with bash, a .py with
+# `uv run` so a PEP 723 header can declare its own dependencies.
+recall = "memory.d/recall.example.sh"
+remember = ""
+
+# Recall sits between the question and the first sound of the answer. Three
+# seconds of silence after a question already reads as "he did not hear me",
+# which is why this is a budget rather than a suggestion. Anything slower
+# belongs in a room, asked on purpose, not in every phrase.
+timeout_s = 3.0
+
+# A store having a bad day can hand back a whole document, and a whole document
+# costs seconds of reading before he says a word.
+max_chars = 1500
+
+# How the recalled text is put in front of the question. Keep it short: this is
+# read by a model that has been told to answer in three sentences.
+template = """Some notes that may be relevant to this question:
+{facts}
+
+The question: {q}"""
