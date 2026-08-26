@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Свои плейлисты Spotify: список, создание, добавление треков, запуск.
+"""Your own Spotify playlists: list, create, add tracks, play.
 
-Работает на доступе от имени пользователя - см. auth.py. Ключа приложения тут
-не хватает: он открывает только публичный каталог.
+Runs on access granted as the user - see auth.py. An app key is not enough
+here: it only opens the public catalogue.
 
-    playlist.py list                        свои плейлисты
-    playlist.py create "Имя" [описание]     создать приватный
-    playlist.py add "часть имени" uri...    добавить треки
-    playlist.py show "часть имени"          что внутри
-    playlist.py uri "часть имени"           uri плейлиста, чтобы включить
+    playlist.py list                        your playlists
+    playlist.py create "Name" [description] create a private one
+    playlist.py add "part of name" uri...   add tracks
+    playlist.py show "part of name"         what is inside
+    playlist.py uri "part of name"          the playlist uri, to play it
 """
 import json
 import sys
@@ -25,7 +25,7 @@ API = "https://api.spotify.com/v1"
 def call(method: str, path: str, body=None):
     tok = access_token()
     if not tok:
-        print("нет доступа от твоего имени - запусти:\n"
+        print("no access granted as you - run:\n"
               "  python3 ~/.claude/skills/spotify/auth.py", file=sys.stderr)
         sys.exit(2)
     data = json.dumps(body).encode() if body is not None else None
@@ -38,7 +38,7 @@ def call(method: str, path: str, body=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode(errors="replace")[:300]
-        print(f"Spotify ответил {e.code}: {detail}", file=sys.stderr)
+        print(f"Spotify answered {e.code}: {detail}", file=sys.stderr)
         sys.exit(1)
 
 
@@ -47,7 +47,7 @@ def me() -> str:
 
 
 def mine() -> list:
-    """Свои плейлисты - те, где ты владелец, чужие подписки отбрасываем."""
+    """Your own playlists - the ones you own; followed ones are dropped."""
     who = me()
     out, url = [], "/me/playlists?limit=50"
     while url:
@@ -64,13 +64,13 @@ def find_one(part: str) -> dict:
     part = part.lower().strip()
     hits = [p for p in mine() if part in p["name"].lower()]
     if not hits:
-        print(f"плейлиста с «{part}» в имени нет", file=sys.stderr)
+        print(f"no playlist with {part!r} in its name", file=sys.stderr)
         sys.exit(1)
     if len(hits) > 1:
         exact = [p for p in hits if p["name"].lower() == part]
         if len(exact) == 1:
             return exact[0]
-        print("подходит несколько, уточни:", file=sys.stderr)
+        print("several match, be more specific:", file=sys.stderr)
         for p in hits:
             print("  " + p["name"], file=sys.stderr)
         sys.exit(1)
@@ -82,37 +82,37 @@ def main() -> int:
 
     if cmd == "list":
         for p in mine():
-            # у некоторых плейлистов Spotify не отдаёт tracks в списке
+            # for some playlists Spotify does not return tracks in the listing
             total = (p.get("tracks") or {}).get("total", "?")
             print(f"{total:>4}  {p['name']}")
 
     elif cmd == "create":
         name = sys.argv[2]
         desc = sys.argv[3] if len(sys.argv) > 3 else ""
-        # приватный по умолчанию: плейлист, собранный голосом между делом,
-        # не должен молча появляться в профиле
-        # POST /me/playlists, а не /users/{id}/playlists: старый адрес Spotify
-        # закрыл для приложений в режиме разработки в феврале 2026, он отдаёт 403
+        # private by default: a playlist put together by voice in passing
+        # should not quietly show up on a public profile
+        # POST /me/playlists, not /users/{id}/playlists: Spotify closed the old
+        # address to apps in development mode in February 2026, and it gives 403
         p = call("POST", "/me/playlists",
                  {"name": name, "public": False, "description": desc})
-        print(f"создан: {p['name']}\n{p['uri']}")
+        print(f"created: {p['name']}\n{p['uri']}")
 
     elif cmd == "add":
         p = find_one(sys.argv[2])
         uris = sys.argv[3:]
         if not uris:
-            print("нечего добавлять", file=sys.stderr)
+            print("nothing to add", file=sys.stderr)
             return 1
-        # /items вместо /tracks - там же, миграция февраля 2026
+        # /items rather than /tracks - same migration, February 2026
         call("POST", f"/playlists/{p['id']}/items", {"uris": uris})
-        print(f"в «{p['name']}» добавлено треков: {len(uris)}")
+        print(f"added {len(uris)} tracks to {p['name']!r}")
 
     elif cmd == "show":
         p = find_one(sys.argv[2])
         page = call("GET", f"/playlists/{p['id']}/items?limit=50")
         print(f"{p['name']}:")
         for it in page.get("items", []):
-            # после миграции поле называется item, у старых ответов - track
+            # after the migration the field is called item; older responses had track
             t = (it or {}).get("item") or (it or {}).get("track") or {}
             if not t:
                 continue
@@ -125,25 +125,25 @@ def main() -> int:
     elif cmd == "like":
         ids = [u.rsplit(":", 1)[-1] for u in sys.argv[2:]]
         if not ids:
-            print("нечего добавлять", file=sys.stderr)
+            print("nothing to add", file=sys.stderr)
             return 1
         call("PUT", "/me/tracks?ids=" + ",".join(ids))
-        print(f"в любимые добавлено треков: {len(ids)}")
+        print(f"hearted {len(ids)} tracks")
 
     elif cmd == "unlike":
-        # По одному треку за раз и только явным указанием: тем же правом можно
-        # обнулить всю библиотеку, поэтому массового снятия здесь нет.
+        # One track at a time, named explicitly: the same scope can empty the
+        # whole library, so there is no bulk removal here.
         if len(sys.argv) != 3:
-            print("снимаю сердечко только с одного трека за раз", file=sys.stderr)
+            print("a heart is removed from one track at a time", file=sys.stderr)
             return 1
         call("DELETE", "/me/tracks?ids=" + sys.argv[2].rsplit(":", 1)[-1])
-        print("сердечко снято")
+        print("heart removed")
 
     elif cmd == "liked":
         ids = [u.rsplit(":", 1)[-1] for u in sys.argv[2:]]
         if not ids:
             page = call("GET", "/me/tracks?limit=20")
-            print("последние сохранённые:")
+            print("most recently saved:")
             for it in page.get("items", []):
                 t = it.get("track") or {}
                 who = ", ".join(a["name"] for a in t.get("artists", []))
@@ -151,7 +151,7 @@ def main() -> int:
             return 0
         res = call("GET", "/me/tracks/contains?ids=" + ",".join(ids))
         for u, yes in zip(sys.argv[2:], res):
-            print(f"  {'есть' if yes else 'нет'}: {u}")
+            print(f"  {'yes' if yes else 'no'}: {u}")
 
     else:
         print(__doc__)

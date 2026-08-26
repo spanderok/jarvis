@@ -64,7 +64,7 @@ WARMUP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "warmup.wav")
 # When the output device has been idle this long, treat it as cold and wake it
 # before the phrase. eqMac (the default device, a virtual one from Bitgapp) and
 # the Bluetooth headset behind it both swallow the beginning of whatever starts
-# playing after a pause - the owner hears the "С" of "Секунду" vanish. The synthesised
+# playing after a pause - the owner hears the first consonant vanish. The synthesised
 # wavs carry only about 97 ms of their own leading silence, measured over the last
 # eight in the cache, and that is not enough.
 #

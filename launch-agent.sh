@@ -114,7 +114,7 @@ assistant_alive() {
 
 start_jarvis_window() {
   assistant_alive && return 0
-  # no JARVIS_ASLEEP: he greets once and listens for "Джарвис" straight away,
+  # no JARVIS_ASLEEP: he greets once and listens for the wake word straight away,
   # so nothing has to be pressed after the launch
   run_in_terminal "clear; JARVIS_DEBUG=1 bash $JARVIS_DIR/jarvisd.sh"
   if ! /usr/bin/pgrep -f "jarvis_overlay.py" >/dev/null; then
@@ -135,13 +135,13 @@ for room in $ROOMS; do
   folder="$(room_field "$room" work_dir)"
   if { [ -n "$name" ] && session_named_alive "$name"; } ||
      { [ -n "$folder" ] && claude_running_in "$folder"; }; then
-    started="${started:+$started, }$label уже был"
+    started="${started:+$started, }$label was already up"
   else
     run_in_terminal "true; bash '$JARVIS_DIR/room.sh' $room"
-    started="${started:+$started, }поднял $label"
+    started="${started:+$started, }started $label"
   fi
 done
-[ -n "$started" ] || started="комнат в конфиге нет"
+[ -n "$started" ] || started="no rooms in the config"
 start_jarvis_window
 /usr/bin/osascript -e 'tell application "Terminal" to activate' \
-  -e "display notification \"$started\" with title \"Джарвис\"" >/dev/null 2>&1
+  -e "display notification \"$started\" with title \"Jarvis\"" >/dev/null 2>&1

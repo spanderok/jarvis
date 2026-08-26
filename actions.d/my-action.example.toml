@@ -5,19 +5,19 @@
 # what came out. No room is involved and no tokens are spent.
 
 # --- the whole thing --------------------------------------------------------
-# Say "поставь таймер на десять минут" and the script gets ["10"].
+# Say "set a timer for ten minutes" and the script gets ["10"].
 [[action]]
 id = "timer"
-patterns = ['^(?:поставь )?таймер (?:на )?(?P<minutes>\d+)']
+patterns = ['^(?:set a )?timer (?:for )?(?P<minutes>\d+)']
 run = "actions.d/timer.sh {minutes}"
 speak = "stdout"
-ok_say = "Поставил."
-fail_say = "Таймер не завёлся."
+ok_say = "Timer set."
+fail_say = "The timer would not start."
 timeout_s = 5
 
 [[action.example]]
-phrase = "поставь таймер на десять минут"
-route = ""   # digits, not words - speech gives "десять", so this one is honest
+phrase = "set a timer for ten minutes"
+route = ""   # digits, not words - speech gives "ten", so this one is honest
 
 # Named groups in the pattern become {placeholders} in `run`. Everything else
 # about the command line is fixed, which is the point: a route that cannot be
@@ -36,15 +36,15 @@ route = ""   # digits, not words - speech gives "десять", so this one is h
 #
 # [[action]]
 # id = "disk"
-# patterns = ['\bсколько места', '\bдиск заб']
+# patterns = ['\bhow much space', '\bdisk (?:is )?full']
 # run = "actions.d/disk.sh"
 # speak = "retell"
-# prompt = """Хозяин спросил: «{q}»
+# prompt = """The owner asked: "{q}"
 #
-# Вывод df, снят только что:
+# The output of df, taken just now:
 # {facts}
 #
-# Скажи одним предложением, сколько свободно и стоит ли беспокоиться."""
+# Say in one sentence how much is free and whether it is worth worrying about."""
 
 
 # --- passing words from the question ----------------------------------------
@@ -52,7 +52,10 @@ route = ""   # digits, not words - speech gives "десять", so this one is h
 # arguments, so a script can know what was asked about without learning the
 # language. `stopwords` are the words that name nothing.
 #
+# In an inflected language, matching is exact per form: list "agent", "agents",
+# and every case ending you expect, or the ones you missed slip through.
+#
 # [action.words]
 # limit = 3
 # min_len = 3
-# stopwords = ["что", "как", "где", "мне", "покажи"]
+# stopwords = ["what", "how", "where", "the", "show", "me"]

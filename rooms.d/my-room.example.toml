@@ -3,37 +3,40 @@
 #
 # Everything here is merged over config/rooms.toml by id, so this file can add
 # a room, change one field of a shipped room, or switch one off.
+#
+# The wording below is English because that is the default locale. For a whole
+# language swapped at once, see rooms.d/ru.example.toml.
 
 # --- a new room -------------------------------------------------------------
-# Start it once with `bash room.sh notes`, then say "спроси заметки, что я
-# записал про отпуск".
+# Start it once with `bash room.sh notes`, then say "ask notes what I wrote
+# down about the holiday".
 [[room]]
 id = "notes"
-label = "заметки"
-session = "заметки"                 # claude -n заметки
+label = "notes"
+session = "notes"                   # claude -n notes
 work_dir = "~/notes"
 launch = "room.sh notes"
 tint = "honeydew"
 
-ask = ["спроси заметки", "спроси у заметок", "узнай у заметок"]
-tell = ["передай в заметки", "запиши в заметки"]
-bare = ["заметки"]
+ask = ["ask notes", "ask my notes", "check my notes"]
+tell = ["put this in my notes", "write this down", "note this down"]
+bare = ["notes"]
 
-ack_ask = "Спросил заметки."
-ack_tell = "Записал."
-ack_missing = "Окно заметок не найдено."
+ack_ask = "Asked your notes."
+ack_tell = "Written down."
+ack_missing = "No window for your notes."
 
-# Say "в заметках" anywhere in a sentence and it comes here with no "спроси" in
-# front. Leave this out until you are sure the word is never said by accident -
-# an automatic route that fires on an ordinary question is worse than typing
+# Say "in my notes" anywhere in a sentence and it comes here with no "ask" in
+# front. Leave this out until you are sure the phrase is never said by accident
+# - an automatic route that fires on an ordinary question is worse than typing
 # two extra words.
-# mention_patterns = ['\bв заметк\w*']
+# mention_patterns = ['\bin my notes\b']
 
 [[room.example]]
-phrase = "спроси заметки что я записал про отпуск"
+phrase = "ask notes what i wrote about the holiday"
 route = ""      # explicit addressing is resolved before routing, so "" is right
 [[room.example]]
-phrase = "сколько будет дважды два"
+phrase = "what is two times two"
 route = ""
 
 
@@ -44,8 +47,8 @@ route = ""
 # [[room]]
 # id = "chat"
 # enabled = true
-# session = "слак"
-# mention_patterns = ['\bслак\w*']
+# session = "slack"
+# mention_patterns = ['\bslack\b']
 
 
 # --- switching one off ------------------------------------------------------

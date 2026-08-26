@@ -23,7 +23,7 @@ for i, d in enumerate(sd.query_devices()):
         print(f"  [{i}] {d['name']} ({d['max_input_channels']} ch){mark}")
 
 peaks = []
-print(f"\nтеперь говори. Замер {SECONDS} секунд:\n")
+print(f"\nnow talk. Measuring for {SECONDS} seconds:\n")
 with sd.InputStream(samplerate=16000, channels=1, dtype="int16", blocksize=2000) as st:
     end = time.monotonic() + SECONDS
     while time.monotonic() < end:
@@ -35,11 +35,13 @@ with sd.InputStream(samplerate=16000, channels=1, dtype="int16", blocksize=2000)
 
 top = max(peaks) if peaks else 0
 quiet = sum(1 for p in peaks if p < 5)
-print(f"\nпик {top:.0f}, тихих кадров {quiet} из {len(peaks)}")
+print(f"\npeak {top:.0f}, {quiet} quiet frames out of {len(peaks)}")
 if top < 10:
-    print("ВЕРДИКТ: микрофон не доходит до этого терминала - дай ему доступ "
-          "в Настройки -> Конфиденциальность -> Микрофон и перезапусти терминал")
+    print("VERDICT: the microphone does not reach this terminal - grant it access\n"
+          "         in System Settings -> Privacy & Security -> Microphone,\n"
+          "         then restart the terminal")
 elif top < 200:
-    print(f"ВЕРДИКТ: звук есть, но тихий. Запускай демон с JARVIS_MIN_LEVEL={int(top/3)}")
+    print(f"VERDICT: there is sound, but it is quiet. Start the daemon with "
+          f"JARVIS_MIN_LEVEL={int(top/3)}")
 else:
-    print("ВЕРДИКТ: микрофон в порядке")
+    print("VERDICT: the microphone is fine")

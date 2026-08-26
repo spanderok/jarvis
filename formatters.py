@@ -17,15 +17,15 @@ def _fields(out: str) -> dict[str, str]:
 
 
 def spotify(out: str, argv: list[str]) -> str:
-    """`skills/spotify/spotify.sh` prints "поле: значение" lines.
+    """`skills/spotify/spotify.sh` prints "field: value" lines.
 
     Volume ends up on the last line, a track on its own two. Anything else is
     a one-line status and goes out as it came.
     """
     if argv and argv[0] == "vol":
-        return out.splitlines()[-1].replace("громкость:", "громкость")
+        return out.splitlines()[-1].replace("volume:", "volume")
     fields = _fields(out)
-    if "трек" in fields:
-        who = fields.get("исполнитель", "")
-        return fields["трек"] + (f", {who}" if who else "")
+    if "track" in fields:
+        who = fields.get("artist", "")
+        return fields["track"] + (f", {who}" if who else "")
     return out.splitlines()[0]

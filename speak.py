@@ -5,8 +5,8 @@
 """Silero TTS wrapper: speak Russian text aloud on macOS.
 
 Usage:
-  uv run speak.py "текст"          # or pipe text via stdin
-  JARVIS_VOICE=eugene uv run speak.py "текст"
+  uv run speak.py "text"           # or pipe text via stdin
+  JARVIS_VOICE=eugene uv run speak.py "text"
 
 First run downloads the v4_ru model (~60 MB) into ~/.claude/jarvis/models/.
 """

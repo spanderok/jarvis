@@ -3,16 +3,16 @@
 # Jarvis daemon or a listener armed by another session - and say who that was.
 # The microphone is single, so this is the only honest way to switch owners.
 #
-#   bash take-mic.sh            # забрать молча, вывод одной строкой
-#   bash take-mic.sh --dry-run  # только сказать, кто держит
+#   bash take-mic.sh            # take it quietly, one line of output
+#   bash take-mic.sh --dry-run  # only say who is holding it
 JARVIS_DIR="$HOME/.claude/jarvis"
 owner=$(cat "$JARVIS_DIR/listener.owner" 2>/dev/null)
 pids=$(/usr/bin/pgrep -f "jarvis_daemon.py" 2>/dev/null | tr '\n' ' ')
 
 if [ "$1" = "--dry-run" ]; then
-  if [ -n "$owner" ]; then echo "микрофон держит сессия «${owner}»"
-  elif [ -n "$pids" ]; then echo "микрофон держит Джарвис-демон (${pids})"
-  else echo "микрофон свободен"; fi
+  if [ -n "$owner" ]; then echo "the microphone is held by session \"${owner}\""
+  elif [ -n "$pids" ]; then echo "the microphone is held by the Jarvis daemon (${pids})"
+  else echo "the microphone is free"; fi
   exit 0
 fi
 
@@ -23,9 +23,9 @@ for pid in $pids; do kill "$pid" 2>/dev/null; done
 rm -f "$JARVIS_DIR/listener.pid" "$JARVIS_DIR/listener.owner"
 
 if [ -n "$owner" ]; then
-  echo "микрофон забран у сессии «${owner}»"
+  echo "took the microphone from session \"${owner}\""
 elif [ -n "$pids" ]; then
-  echo "остановлен Джарвис-демон, микрофон свободен"
+  echo "stopped the Jarvis daemon, the microphone is free"
 else
-  echo "микрофон был свободен"
+  echo "the microphone was already free"
 fi

@@ -2,10 +2,10 @@
 # Speak a short text with the same voice Jarvis uses (local vosk 0.7, speaker 4)
 # and optionally send it to Telegram as a voice message.
 #
-#   bash speak.sh "готово, тесты зелёные"              # aloud on this Mac
-#   bash speak.sh --telegram "готово, тесты зелёные"   # voice message in Telegram
-#   bash speak.sh --both "готово, тесты зелёные"       # aloud and to Telegram
-#   bash speak.sh --file /tmp/answer.ogg "текст"       # only build the file
+#   bash speak.sh "done, tests are green"              # aloud on this Mac
+#   bash speak.sh --telegram "done, tests are green"   # voice message in Telegram
+#   bash speak.sh --both "done, tests are green"       # aloud and to Telegram
+#   bash speak.sh --file /tmp/answer.ogg "text"        # only build the file
 #   bash speak.sh --stop                               # shut up right now
 #
 # The voice is local, so Telegram messages are built offline too. VOICE_ENGINE=edge
@@ -24,7 +24,7 @@ case "$1" in
   --stop)     MODE="stop";     shift ;;
 esac
 
-# "замолчи" from any session, not only from the one that is talking: the keys
+# "be quiet" from any session, not only from the one that is talking: the keys
 # reach the listener, but the owner is often typing in another agent's window.
 if [ "$MODE" = "stop" ]; then
   # -x, not -f: "-f afplay" matches any command line that merely mentions the
@@ -35,12 +35,12 @@ if [ "$MODE" = "stop" ]; then
   pkill -x afplay >/dev/null 2>&1
   pkill -x ffplay >/dev/null 2>&1
   rmdir "$HOME/.claude/tts-cache/.speak.lock" 2>/dev/null
-  echo "остановил озвучку"
+  echo "stopped the speech"
   exit 0
 fi
 
 TEXT="$*"
-[ -z "$TEXT" ] && { echo "нечего говорить: текст не передан" >&2; exit 1; }
+[ -z "$TEXT" ] && { echo "nothing to say: no text was passed" >&2; exit 1; }
 
 # On a call the room hears everything the speakers say, so the answer goes to
 # Telegram as a voice message instead of into the meeting. the owner gets it on the
@@ -48,8 +48,8 @@ TEXT="$*"
 if [ "$MODE" = "say" ] || [ "$MODE" = "both" ]; then
   if ! bash "$HOME/.claude/jarvis/call_guard.sh"; then
     MODE="telegram"
-    echo "созвон: отправляю голосовым в телеграм вместо динамиков" >&2
-    # the badge waits for the speech lock to drop "думаю"; there will be no lock
+    echo "in a call: sending a voice message to Telegram instead of the speakers" >&2
+    # the badge waits for the speech lock to drop "thinking"; there will be no lock
     bash "$HOME/.claude/jarvis/answered.sh" 2>/dev/null
   fi
 fi
@@ -79,7 +79,7 @@ elif [ "$ENGINE" = "vosk" ]; then
   if [ ! -s "$WAV" ]; then
     if ! "$VOSK_PY" "$VOSK_SAY" --to "$WAV.tmp" "$TEXT" >/dev/null 2>&1 || [ ! -s "$WAV.tmp" ]; then
       rm -f "$WAV.tmp"
-      echo "локальный голос не собрался, пробую сеть" >&2
+      echo "the local voice would not render, trying the network" >&2
       ENGINE="edge"; SRC="$MP3"
     else
       mv "$WAV.tmp" "$WAV"
@@ -95,7 +95,7 @@ if [ "$MODE" != "say" ] && [ "$ENGINE" = "edge" ] && [ ! -s "$MP3" ]; then
       say -v Yuri "$TEXT"   # offline fallback, local playback only
       exit $?
     fi
-    echo "edge-tts недоступен, голосовое сообщение собрать нечем" >&2
+    echo "edge-tts is unavailable, nothing left to build the voice message with" >&2
     exit 1
   fi
   mv "$MP3.tmp" "$MP3"
@@ -121,7 +121,7 @@ lock() {
 }
 
 # Speaking starts on a deliberately tiny first piece: measured on 20.08, the
-# service returns audio for "Готово." in 0.43 s but needs 3.36 s for a whole
+# service returns audio for one short word in 0.43 s but needs 3.36 s for a whole
 # sentence. play_fast.py cuts the text and synthesises pieces in parallel.
 # the owner has the right of way: if the listener is recording them right now,
 # starting to speak would both cut him off and make the listener drop his phrase.
@@ -150,7 +150,7 @@ play_fast() {
     # network voice repeat the whole answer, which is what happened on 21.08.
     spoken=$(stat -f %m "$HOME/.claude/jarvis/last_spoken" 2>/dev/null || echo 0)
     if [ "$spoken" -ge "$started" ]; then
-      echo "локальный голос отыграл и упал на выходе, повтор не нужен" >&2
+      echo "the local voice played and then exited badly - no need to repeat it" >&2
       return 0
     fi
   fi
@@ -170,23 +170,23 @@ to_ogg() {
 
 send_telegram() {
   local tok chat ogg rc
-  tok=$(security find-generic-password -s rocketwatch-telegram-token -w 2>/dev/null)
-  chat=$(security find-generic-password -s rocketwatch-telegram-chat -w 2>/dev/null)
+  tok=$(security find-generic-password -s jarvis-telegram-token -w 2>/dev/null)
+  chat=$(security find-generic-password -s jarvis-telegram-chat -w 2>/dev/null)
   if [ -z "$tok" ] || [ -z "$chat" ]; then
-    echo "нет токена или chat id в Keychain (rocketwatch-telegram-token/-chat)" >&2
+    echo "no token or chat id in the Keychain (jarvis-telegram-token/-chat)" >&2
     return 1
   fi
   ogg="$CACHE/$KEY.ogg"
-  [ -s "$ogg" ] || to_ogg "$ogg" || { echo "ffmpeg не собрал ogg" >&2; return 1; }
+  [ -s "$ogg" ] || to_ogg "$ogg" || { echo "ffmpeg did not produce an ogg" >&2; return 1; }
   rc=$(curl -s -o /dev/null -w '%{http_code}' \
         -F "chat_id=$chat" -F "voice=@$ogg" \
         ${CAPTION:+-F "caption=$CAPTION"} \
         "https://api.telegram.org/bot$tok/sendVoice")
   if [ "$rc" != "200" ]; then
-    echo "телеграм ответил $rc" >&2
+    echo "Telegram answered $rc" >&2
     return 1
   fi
-  echo "голосовое отправлено в телеграм"
+  echo "voice message sent to Telegram"
 }
 
 # Who just talked to the owner. The microphone belongs to one session only, so its
@@ -203,5 +203,5 @@ case "$MODE" in
   say)      remember_speaker; play_fast ;;
   telegram) remember_speaker; send_telegram ;;
   both)     remember_speaker; send_telegram; play_fast ;;
-  file)     to_ogg "$OUT" && echo "собрано: $OUT" ;;
+  file)     to_ogg "$OUT" && echo "built: $OUT" ;;
 esac

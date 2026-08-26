@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Разовая авторизация Spotify от имени хозяина - для своих плейлистов.
+"""One-time Spotify authorisation as the owner - for their own playlists.
 
-Ключ приложения (client credentials) открывает только публичный каталог. Всё
-личное - свои плейлисты, создание, добавление треков - требует доступа от имени
-пользователя. Это одноразовая процедура: открывается браузер, хозяин нажимает
-«Agree», и на диск ложится долгоживущий refresh-токен.
+An app key (client credentials) only opens the public catalogue. Everything
+personal - your own playlists, creating them, adding tracks - needs access
+granted as the user. It is a one-time procedure: a browser opens, the owner
+presses Agree, and a long-lived refresh token lands on disk.
 
-    python3 auth.py            один раз, чтобы получить доступ
-    python3 auth.py --check    жив ли доступ
+    python3 auth.py            once, to get access
+    python3 auth.py --check    is the access still alive
 
-Токен лежит в ~/.claude/jarvis/spotify_user_token с правами 600. Логин и пароль
-скрипт не видит - их вводит сам Spotify в браузере.
+The token lives in ~/.claude/jarvis/spotify_user_token, mode 600. The script
+never sees the login or the password - those go into Spotify's own page.
 """
 import base64
 import hashlib
@@ -28,28 +28,28 @@ import urllib.request
 PORT = 8888
 REDIRECT = f"http://127.0.0.1:{PORT}/callback"
 TOKEN_FILE = os.path.expanduser("~/.claude/jarvis/spotify_user_token")
-# Ровно то, о чём хозяин просил, и ничего сверх.
+# Exactly what was asked for, and nothing beyond it.
 #
-# Плейлисты - читать свои, писать в приватные и публичные.
-# История - последние 50 воспроизведений и топы за месяц, полгода, всё время;
-# добавлено 22.08 под разбор вкусов. Всё только на чтение.
+# Playlists - read your own, write to private and public ones.
+# History - the last 50 plays and the top items over a month, six months and all
+# time; added for taste analysis. Read-only, all of it.
 #
-# Чего тут намеренно нет: user-read-email, user-read-private (личные данные
-# аккаунта), streaming и user-modify-playback-state (плеером управляет
-# AppleScript, права не нужны).
+# Deliberately absent: user-read-email and user-read-private (personal account
+# data), streaming and user-modify-playback-state (the player is driven by
+# AppleScript, so no scope is needed).
 #
-# user-library-modify добавлено 23.08 по прямой просьбе хозяина - без него
-# нельзя поставить сердечко голосом. Тем же правом можно снять сердечки со всей
-# библиотеки, поэтому снятие в playlist.py сделано отдельной командой unlike и
-# работает по одному треку: массового удаления в коде нет вообще.
+# user-library-modify is here on an explicit request - without it a heart cannot
+# be added by voice. The same scope can also strip the hearts off an entire
+# library, which is why removal in playlist.py is its own `unlike` command and
+# works one track at a time: there is no bulk removal anywhere in the code.
 SCOPES = " ".join([
     "playlist-read-private",
     "playlist-modify-private",
     "playlist-modify-public",
     "user-read-recently-played",
     "user-top-read",
-    "user-library-read",     # сохранённое сердечком, добавлено 22.08 по просьбе
-    "user-library-modify",   # ставить и снимать сердечко, 23.08
+    "user-library-read",     # what has been hearted
+    "user-library-modify",   # adding and removing a heart
 ])
 
 
@@ -85,7 +85,7 @@ def load() -> dict:
 
 
 def access_token() -> str:
-    """Живой токен доступа: из файла, обновлённый по refresh, или пусто."""
+    """A live access token: from the file, refreshed, or empty."""
     saved = load()
     if not saved.get("refresh_token"):
         return ""
@@ -98,9 +98,9 @@ def access_token() -> str:
         fresh = post_token({"grant_type": "refresh_token",
                             "refresh_token": saved["refresh_token"],
                             "client_id": cid, "client_secret": secret})
-    except Exception:                    # noqa: BLE001 - истёкший или отозванный доступ
+    except Exception:                    # noqa: BLE001 - expired or revoked access
         return ""
-    # Spotify не всегда присылает новый refresh - старый остаётся рабочим
+    # Spotify does not always send a new refresh token - the old one keeps working
     fresh.setdefault("refresh_token", saved["refresh_token"])
     save(fresh)
     return fresh.get("access_token", "")
@@ -110,31 +110,31 @@ class Catcher(http.server.BaseHTTPRequestHandler):
     code = None
     state = None
 
-    def do_GET(self):                    # noqa: N802 - имя задаёт http.server
+    def do_GET(self):                    # noqa: N802 - the name is http.server's
         query = urllib.parse.urlparse(self.path).query
         params = urllib.parse.parse_qs(query)
         Catcher.code = (params.get("code") or [None])[0]
         Catcher.state = (params.get("state") or [None])[0]
-        body = ("<h2>Готово, можно закрывать вкладку.</h2>"
+        body = ("<h2>Done, you can close this tab.</h2>"
                 if Catcher.code else
-                f"<h2>Отказано: {params.get('error', ['неизвестно'])[0]}</h2>")
+                f"<h2>Refused: {params.get('error', ['unknown'])[0]}</h2>")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
         self.wfile.write(body.encode())
 
-    def log_message(self, *args):        # тишина в консоли
+    def log_message(self, *args):        # keep the console quiet
         pass
 
 
 def authorize() -> int:
     cid, secret = keychain("spotify-client-id"), keychain("spotify-client-secret")
     if not cid or not secret:
-        print("нет ключей в Keychain: spotify-client-id / spotify-client-secret")
+        print("no keys in the Keychain: spotify-client-id / spotify-client-secret")
         return 1
 
     state = secrets.token_urlsafe(16)
-    # PKCE не обязателен при наличии секрета, но verifier дешёв и лишним не будет
+    # PKCE is not required when there is a secret, but a verifier is cheap
     url = "https://accounts.spotify.com/authorize?" + urllib.parse.urlencode({
         "client_id": cid, "response_type": "code", "redirect_uri": REDIRECT,
         "scope": SCOPES, "state": state, "show_dialog": "false",
@@ -142,7 +142,7 @@ def authorize() -> int:
 
     server = http.server.HTTPServer(("127.0.0.1", PORT), Catcher)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print(f"открываю браузер, нажми Agree. Если не открылось - вот адрес:\n{url}\n")
+    print(f"opening the browser, press Agree. If it did not open, here is the address:\n{url}\n")
     subprocess.run(["open", url], check=False)
 
     deadline = time.time() + 180
@@ -151,29 +151,29 @@ def authorize() -> int:
     server.shutdown()
 
     if Catcher.code is None:
-        print("не дождался ответа за три минуты")
+        print("no answer came back within three minutes")
         return 1
     if Catcher.state != state:
-        print("состояние запроса не совпало - авторизация отклонена")
+        print("the request state did not match - authorisation refused")
         return 1
 
     tokens = post_token({"grant_type": "authorization_code", "code": Catcher.code,
                          "redirect_uri": REDIRECT, "client_id": cid,
                          "client_secret": secret})
     if "refresh_token" not in tokens:
-        print("Spotify не выдал refresh-токен:", tokens)
+        print("Spotify did not return a refresh token:", tokens)
         return 1
     save(tokens)
-    print(f"доступ получен, токен в {TOKEN_FILE}")
+    print(f"access granted, token in {TOKEN_FILE}")
     return 0
 
 
 if __name__ == "__main__":
     if "--check" in sys.argv:
         tok = access_token()
-        print("доступ есть" if tok else "доступа нет, запусти без --check")
+        print("access is there" if tok else "no access, run it without --check")
         sys.exit(0 if tok else 1)
-    if "--token" in sys.argv:            # для spotify.sh
+    if "--token" in sys.argv:            # for spotify.sh
         tok = access_token()
         print(tok)
         sys.exit(0 if tok else 1)

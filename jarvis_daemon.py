@@ -387,10 +387,10 @@ FLOOR_FALL = float(os.environ.get("JARVIS_FLOOR_FALL", "0.15"))
 # release event canonicalises to the same object. On macOS a letter released
 # with Cmd down often arrives without a character, so "j" stayed in that set for
 # good and from then on bare Cmd+Shift woke Jarvis - four times during a call.
-# Tap keys (the Keychron Q10 M5 key sends End, F13 covers a firmware remap):
+# Tap keys (a macro key that sends End, plus F13 for a firmware remap):
 #   one press   = "I'm done talking, answer now" - the dialogue keeps going
 #   two presses = interrupt what Jarvis is doing, or wake him when he is idle
-# F18 only. End used to be here because the Keychron M5 key sends End - but then
+# F18 only. End used to be here because the macro key sends End - but then
 # every End pressed while editing woke Jarvis. keymap.sh remaps M5 instead, and it
 # is applied at startup below, so M5 keeps working and End stays a plain key.
 # The target moved from F13 to F18 on 21.08: F13 is Print Screen on a Mac, and
@@ -407,7 +407,7 @@ DEFAULT_DONE_KEYS = "<alt_r>"
 # mid-exchange, so pressing Escape in an editor never touches him.
 DEFAULT_OFF_KEYS = "<esc>"
 DOUBLE_TAP_SEC = float(os.environ.get("JARVIS_DOUBLE_TAP", "0.4"))
-# One physical press of the Keychron M5 arrives as two key events, so anything
+# One physical press of a macro key can arrive as two key events, so anything
 # closer together than this is the same press, not a double tap.
 DEBOUNCE_SEC = float(os.environ.get("JARVIS_DEBOUNCE", "0.18"))
 # said while a long question is still being transcribed: one word, no theatre
@@ -597,7 +597,7 @@ def next_frame(audio_q):
 
 
 def apply_keymap() -> None:
-    """Make the Keychron M5 key send F13, if that keyboard is here.
+    """Make the configured macro key send F13, if that keyboard is here.
 
     hidutil mappings do not survive a reboot, so this runs on every start of
     either mode - otherwise M5 falls back to End, which Jarvis no longer listens

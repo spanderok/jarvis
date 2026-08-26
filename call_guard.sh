@@ -32,7 +32,7 @@ output_device() {
   fi
   local name
   name=$(system_profiler SPAudioDataType 2>/dev/null | awk '
-    /^        [A-Za-zА-Яа-я].*:$/ { name=$0 }
+    /^        [[:alpha:]].*:$/ { name=$0 }
     /Default Output Device: Yes/ { print name; exit }')
   printf '%s' "$name" > "$CACHE"
   printf '%s' "$name"
@@ -41,8 +41,8 @@ output_device() {
 if in_call; then
   dev=$(output_device)
   case "$dev" in
-    *Speakers*|*Динамики*)
-      echo "идёт созвон, звук в динамики ($(echo "$dev" | tr -d ' :')) - вслух молчу" >&2
+    *Speakers*|*Speaker*)
+      echo "a call is running and the sound goes to the speakers ($(echo "$dev" | tr -d ' :')) - staying quiet" >&2
       exit 1 ;;
     *)
       exit 0 ;;   # headphones: nobody but the owner hears it

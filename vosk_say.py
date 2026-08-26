@@ -1,7 +1,7 @@
 """One-shot local voice: text -> speakers, no network, no permanent process.
 
 Usage:
-  vosk_say.py "текст"             speak it
+  vosk_say.py "text"              speak it
   vosk_say.py --to out.wav "..."  write the wav instead of playing
 
 Long text is cut into sentences: the first one starts playing while the rest are
@@ -35,7 +35,7 @@ STOP_FILE = os.path.join(JARVIS_DIR, "speak.stop")
 SPOKEN_FILE = os.path.join(JARVIS_DIR, "last_spoken")
 SPEAKER = int(os.environ.get("JARVIS_VOSK_SPEAKER", "4"))
 # How much the model is allowed to jitter the length of every sound. The model
-# ships with 0.8, and that jitter is what ate short words: "игр" and "таба" drew a
+# ships with 0.8, and that jitter is what ate short words: one-syllable ones drew a
 # short duration by luck and smeared. Measured on one phrase said five times over,
 # at 0.8 the length wandered by 0.56 s, at 0.2 by 0.09 s. the owner picked the steady
 # version by ear on 21.08, then asked twice for more of the life back: 0.4 first,
@@ -43,7 +43,7 @@ SPEAKER = int(os.environ.get("JARVIS_VOSK_SPEAKER", "4"))
 DURATION_NOISE = float(os.environ.get("JARVIS_DURATION_NOISE", "0.5"))
 # Speed of speech, 1.0 is what the model ships with. Never passed until 21.08, so
 # the model default stood; the owner asked for ten percent slower after hearing the
-# day read back - short words like "игр" and "таба" were smearing at full speed.
+# day read back - short one-syllable words were smearing at full speed.
 SPEECH_RATE = float(os.environ.get("JARVIS_SPEECH_RATE", "0.9"))
 CHUNK_LIMIT = 220  # characters; longer chunks delay the first sound without sounding better
 DEBUG = os.environ.get("JARVIS_TTS_DEBUG") == "1"
@@ -52,7 +52,7 @@ DICT_VERSION = dict_version()
 
 def tick(stage: str) -> None:
     if DEBUG:
-        sys.stderr.write(f"[{time.time() - START:5.2f} с] {stage}\n")
+        sys.stderr.write(f"[{time.time() - START:5.2f}s] {stage}\n")
         sys.stderr.flush()
 
 
@@ -145,7 +145,7 @@ def main() -> None:
 
     # A fully cached phrase never touches the model: 359 MB stay unallocated.
     if out_file is None and all(os.path.exists(p) for p in paths):
-        tick("нашёл в кеше, играю")
+        tick("found in the cache, playing")
         mark_spoken()
         for path in paths:
             if stopped():
@@ -164,11 +164,11 @@ def main() -> None:
         return
 
     from vosk_tts import Model, Synth
-    tick("библиотека загружена")
+    tick("library loaded")
     model = Model(model_path=MODEL_DIR)
     model.dic = StressDict()
     synth = Synth(model)
-    tick("модель готова")
+    tick("model ready")
 
     if out_file is not None:
         synth.synth(text, out_file, speaker_id=SPEAKER,
@@ -190,12 +190,12 @@ def main() -> None:
                 os.replace(path + ".tmp", path)
             except Exception as e:
                 # never fail silently: a lost phrase looks like Jarvis ignoring you
-                sys.stderr.write(f"синтез не смог: {e}\n")
+                sys.stderr.write(f"synthesis failed: {e}\n")
                 subprocess.run(["say", "-v", "Yuri", chunk],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 continue
         if index == 0:
-            tick("первый звук")
+            tick("first sound")
             mark_spoken()
         ready.put(path)
     ready.put(None)

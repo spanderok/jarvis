@@ -3,7 +3,8 @@
 The vosk model knows Cyrillic letters and a handful of punctuation marks. A digit,
 a latin letter or a «ёлочка» raises KeyError deep inside the library, and the
 phrase is lost with no sound at all - which is exactly how the answer about
-Полонский disappeared on 20.08. Everything unknown is converted or dropped here.
+a surname vanished mid-sentence on 20.08. Everything unknown is converted or
+dropped here.
 """
 import re
 

@@ -64,7 +64,7 @@ def stressed_form(word):
             marked = True
         out.append(ch.lower())
     if not marked:
-        raise ValueError(f"в слове «{word}» не отмечена ударная гласная заглавной буквой")
+        raise ValueError(f"no stressed vowel marked with a capital letter in {word!r}")
     return "".join(out)
 
 
@@ -113,7 +113,7 @@ def list_overrides(db_path=DB):
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "build":
-        print(f"слов записано: {build(sys.argv[2])}")
+        print(f"words written: {build(sys.argv[2])}")
     elif len(sys.argv) > 1 and sys.argv[1] == "list":
         for w, p in list_overrides():
             print(f"{w}\t{p}")
@@ -122,4 +122,4 @@ if __name__ == "__main__":
             plain, phonemes = add_override(word)
             print(f"{plain}: {phonemes}")
     else:
-        print("использование: vosk_dict.py тЕстовый [ещёСлово ...] | list | build <файл>")
+        print("usage: vosk_dict.py тЕстовый [anotherWord ...] | list | build <file>")

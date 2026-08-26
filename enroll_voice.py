@@ -5,7 +5,7 @@
 """Record the owner's voice print, in every way they actually sound.
 
     uv run ~/.claude/jarvis/enroll_voice.py            record the whole profile
-    uv run ~/.claude/jarvis/enroll_voice.py --add шёпот   one more condition
+    uv run ~/.claude/jarvis/enroll_voice.py --add whisper  one more condition
     uv run ~/.claude/jarvis/enroll_voice.py --check    say something, get a score
     uv run ~/.claude/jarvis/enroll_voice.py --report    what the profile holds
     uv run ~/.claude/jarvis/enroll_voice.py --rebuild  redo the maths, keep the takes
@@ -20,8 +20,8 @@ The threshold is not guessed - it is measured. Two crowds are compared:
   his takes against each other  -> how low his own voice can score
   other voices against his takes -> how high a stranger gets
 Other voices are free and already on the disk: Jarvis' own synthesized speech
-in cache-vosk (the voice most likely to trigger the microphone, since it plays
-through the speakers) plus the two Russian macOS voices, Milena and Yuri.
+in his phrase cache (the voice most likely to trigger the microphone, since it
+plays through the speakers) plus two macOS system voices.
 """
 
 import glob
@@ -37,6 +37,7 @@ import numpy as np
 import sounddevice as sd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lang as lang_mod  # noqa: E402
 import voiceprint as speaker  # noqa: E402
 
 RATE = speaker.SAMPLE_RATE
@@ -44,27 +45,21 @@ TAKE_SEC = 6.0
 CACHE = os.path.join(speaker.JARVIS_DIR, "cache-vosk")
 COHORT_DIR = os.path.join(speaker.JARVIS_DIR, "cohort")
 REJECTED_DIR = os.path.join(speaker.JARVIS_DIR, "rejected")
+# macOS voices used as the cohort, named by the locale so they speak the same
+# language he does - a crowd in another language is too easy to beat.
+SYSTEM_VOICES = [v for v in os.environ.get(
+    "JARVIS_COHORT_VOICES", "").split(",") if v.strip()]
 
 # The phrase does not matter to the model - it compares voices, not words - but
-# a real command is easier to say naturally than a test sentence.
-CONDITIONS = [
-    ("обычно", "Обычным голосом, как всегда сидишь у мака.",
-     "Джарвис, что там по задачам на сегодня, посмотри пожалуйста"),
-    ("близко", "Ближе к микрофону, чуть тише обычного.",
-     "Джарвис, поставь что-нибудь бодрое из моих плейлистов"),
-    ("далеко", "Отойди на два-три метра и скажи громче.",
-     "Джарвис, сделай погромче и переключи трек, этот не нравится"),
-    ("шум", "Включи музыку или вентилятор, говори поверх шума.",
-     "Джарвис, добавь этот трек в плейлист и скажи что получилось"),
-    ("устал", "Тихо, устало, чуть хрипло - как поздно вечером.",
-     "Джарвис, что там с почтой накопилось, я уже никакой"),
-    ("быстро", "Быстро и небрежно, проглатывая окончания.",
-     "Джарвис, скинь мне в телеграм результат когда закончишь"),
-]
+# a real command is easier to say naturally than a test sentence. Which phrases,
+# and how to say each one, comes from locales/<lang>.toml.
+LOC = lang_mod.current()
+CONDITIONS = list(LOC.enroll)
+SYSTEM_VOICES = SYSTEM_VOICES or list(LOC.cohort_voices)
 
 
 def rec_take(secs: float = TAKE_SEC) -> np.ndarray:
-    print(f"    пишу {secs:.0f} секунд... говори", flush=True)
+    print(f"    recording {secs:.0f} seconds... talk", flush=True)
     audio = sd.rec(int(secs * RATE), samplerate=RATE, channels=1, dtype="int16")
     sd.wait()
     # An extra Enter pressed while the microphone was open would otherwise be
@@ -137,11 +132,12 @@ def other_voices(limit: int = 24) -> list[tuple[str, np.ndarray]]:
             break
         a = read_wav_16k(path)
         if a is not None and len(a) / RATE >= 1.5:
-            out.append(("джарвис-tts", a))
+            out.append(("jarvis-tts", a))
             tts += 1
-    for voice in ("Milena", "Yuri"):
-        for text in ("Джарвис, поставь что-нибудь бодрое из моих плейлистов",
-                     "Джарвис, что там с почтой и добавь этот трек"):
+    # Two system voices of the same language: free, always installed, and
+    # closer to him than a random stranger would be.
+    for voice in SYSTEM_VOICES:
+        for text in (t[2] for t in CONDITIONS[:2]):
             a = system_voice(voice, text)
             if a is not None:
                 out.append((voice.lower(), a))
@@ -182,10 +178,10 @@ def pick_threshold(mine: np.ndarray, theirs: list[tuple[str, np.ndarray]]):
     # Same 40% rule for both lines: stand 40% of the way from the strangers up
     # to his own worst take. Not the midpoint, because failing to recognise him
     # costs more than letting one stranger phrase through.
-    # 0.20 под худшим тейком, не 0.10. Замер 22.08: тейки при записи узнавались
-    # на 0.66, а живая фраза с того же места - на 0.55, и запас в 0.10 отбил его
-    # собственный голос. Отрыв от чужих при этом остаётся вторым условием, так
-    # что низкий порог никого лишнего не пускает.
+    # 0.20 below the worst take, not 0.10. Measured 22.08: takes recognised each
+    # other at 0.66 during enrollment, while a live phrase from the same spot
+    # scored 0.55 - and a 0.10 margin then refused his own voice. The gap over
+    # the cohort stays the second condition, so a low floor lets nobody in.
     floor = max(0.45, min(worst_self - 0.20, 0.60))
     margin = best_gap + 0.40 * (worst_gap - best_gap)
     return floor, margin, worst_self, worst_gap, best_gap, who
@@ -215,17 +211,18 @@ def warn_listener() -> None:
     except Exception:
         return
     if out:
-        print("!! Джарвис сейчас слушает микрофон - он услышит эту запись и "
-              "начнёт отвечать.\n   Останови его (Ctrl+C в его окне или "
-              "/jarvis-daemon stop) и запусти меня снова.\n")
-        if input("   Всё равно продолжить? [y/N] ").strip().lower() != "y":
+        print("!! Jarvis is listening to the microphone right now - he will hear\n"
+              "   this recording and start answering it. Stop him (Ctrl+C in his\n"
+              "   window, or bash take-mic.sh) and run this again.\n")
+        if input("   Carry on anyway? [y/N] ").strip().lower() != "y":
             sys.exit(1)
 
 
 def enroll(only: str | None = None) -> None:
     warn_listener()
-    conds = CONDITIONS if only is None else [(only, "Своя условие - говори как хочешь.",
-                                              "Джарвис, проверка голоса, раз два три")]
+    conds = CONDITIONS if only is None else [
+        (only, "Your own condition - say it however you like.",
+         f"{LOC.name}, voice check, one two three")]
     vecs: list[np.ndarray] = []
     labels: list[str] = []
     if only is not None and os.path.exists(speaker.PROFILE):
@@ -233,36 +230,36 @@ def enroll(only: str | None = None) -> None:
         vecs = [np.asarray(v, dtype=np.float32) for v in old["samples"]]
         labels = list(old["labels"])
 
-    print(f"Запишем {len(conds)} тейков по {TAKE_SEC:.0f} секунд. "
-          "Фраза на экране - подсказка, можно говорить своими словами.\n")
+    print(f"Recording {len(conds)} takes of {TAKE_SEC:.0f} seconds each. The phrase "
+          "on screen is a prompt - your own words are fine.\n")
     for key, how, phrase in conds:
         while True:
             print(f"[{key}] {how}")
-            print(f'    фраза: "{phrase}"')
-            input("    Enter - и говори: ")
+            print(f'    phrase: "{phrase}"')
+            input("    Enter, then talk: ")
             audio = rec_take()
             lvl = loudness(audio)
-            print(f"    записано, громкость {lvl:.0f}")
+            print(f"    recorded, level {lvl:.0f}")
             if lvl < 150:
-                print("    это почти тишина. Перепишем.")
+                print("    that is nearly silence. Again.")
                 continue
             try:
                 vec = speaker.embed(audio)
             except Exception as e:
-                print(f"    не смог посчитать отпечаток: {e}. Перепишем.")
+                print(f"    could not compute the print: {e}. Again.")
                 continue
             if vecs:
                 near = float(np.max(np.stack(vecs) @ vec))
-                print(f"    похоже на прошлые тейки: {near:.2f}")
-            again = input("    оставляем? [Y/n] ").strip().lower()
-            if again in ("", "y", "д", "da"):
+                print(f"    similar to the earlier takes: {near:.2f}")
+            again = input("    keep it? [Y/n] ").strip().lower()
+            if again in ("", "y", "yes"):
                 vecs.append(vec)
                 labels.append(key)
                 break
-            print("    переписываем.\n")
+            print("    recording it again.\n")
         print()
 
-    print("Считаю, где провести черту. Собираю чужие голоса с диска...")
+    print("Working out where the line goes. Gathering other voices from disk...")
     theirs = other_voices()
     tvecs = []
     for label, audio in theirs:
@@ -282,18 +279,18 @@ def finish(vecs, labels, tvecs) -> None:
              "others": len(tvecs)}
     save(vecs, labels, tvecs, floor, margin, stats)
 
-    print(f"\nТейков в профиле: {len(vecs)} ({', '.join(labels)})")
-    print(f"Чужих голосов для сверки: {len(tvecs)}")
-    print(f"Твой худший тейк узнаётся на: {worst_self:.2f} (порог {floor:.2f})")
-    print(f"Твой худший отрыв от чужих: {worst_gap:+.2f}")
-    print(f"Лучший отрыв у чужого: {best_gap:+.2f} ({who})")
-    print(f"Черта по отрыву: {margin:+.2f}")
+    print(f"\nTakes in the profile: {len(vecs)} ({', '.join(labels)})")
+    print(f"Other voices to compare against: {len(tvecs)}")
+    print(f"Your worst take is recognised at: {worst_self:.2f} (floor {floor:.2f})")
+    print(f"Your smallest gap over the cohort: {worst_gap:+.2f}")
+    print(f"The cohort's best gap: {best_gap:+.2f} ({who})")
+    print(f"The margin line: {margin:+.2f}")
     room = worst_gap - best_gap
     if room < 0.15:
-        print("!! Зазор маленький. Перезапиши тейки, где голос звучал неестественно.")
+        print("!! The gap is small. Re-record any take where the voice sounded forced.")
     else:
-        print(f"Зазор между тобой и чужими: {room:.2f} - этого хватает.")
-    print(f"\nПрофиль лежит в {speaker.PROFILE}")
+        print(f"Room between you and the cohort: {room:.2f} - that is enough.")
+    print(f"\nThe profile is in {speaker.PROFILE}")
 
 
 def rebuild() -> None:
@@ -306,7 +303,7 @@ def rebuild() -> None:
     data = load()
     vecs = [np.asarray(v, dtype=np.float32) for v in data["samples"]]
     vecs = [v / np.linalg.norm(v) for v in vecs]
-    print("Пересобираю чужие голоса с диска...")
+    print("Rebuilding the cohort from disk...")
     tvecs = []
     for label, audio in other_voices():
         try:
@@ -324,9 +321,9 @@ def forgive() -> None:
     """
     files = sorted(glob.glob(os.path.join(REJECTED_DIR, "*.wav")))
     if not files:
-        print("отбитых фраз нет - либо всё узнаётся, либо демон ещё не запускался")
+        print("no refused phrases - either everything is recognised, or he has not run yet")
         return
-    print(f"Отбитых фраз: {len(files)}. Слушаем по одной.\n")
+    print(f"Refused phrases: {len(files)}. Listening one at a time.\n")
     data = load()
     vecs = [np.asarray(v, dtype=np.float32) for v in data["samples"]]
     vecs = [v / np.linalg.norm(v) for v in vecs]
@@ -336,7 +333,7 @@ def forgive() -> None:
         stamp = os.path.basename(path)[:-4]
         print(f"[{stamp}]")
         subprocess.run(["afplay", path], capture_output=True)
-        ans = input("    это был ты? [y - добавить / n - выбросить / s - оставить как есть / q] ")
+        ans = input("    was that you? [y - add / n - discard / s - leave it / q] ")
         ans = ans.strip().lower()
         if ans == "q":
             break
@@ -345,22 +342,22 @@ def forgive() -> None:
         if ans == "y":
             audio = read_wav_16k(path)
             if audio is None:
-                print("    файл не читается, пропускаю")
+                print("    the file will not read, skipping")
                 continue
             try:
                 vecs.append(speaker.embed(audio))
             except Exception as e:
-                print(f"    отпечаток не посчитался: {e}")
+                print(f"    the print would not compute: {e}")
                 continue
-            labels.append(input("    как назовём тейк? ").strip() or "прощённая")
+            labels.append(input("    what shall we call this take? ").strip() or "forgiven")
             added += 1
         done.append(path)
     for path in done:
         os.unlink(path)
     if not added:
-        print("\nничего не добавлено")
+        print("\nnothing was added")
         return
-    print(f"\nДобавлено тейков: {added}. Пересчитываю черту...")
+    print(f"\nTakes added: {added}. Recomputing the line...")
     tvecs = []
     for label, a in other_voices():
         try:
@@ -372,19 +369,19 @@ def forgive() -> None:
 
 def check() -> None:
     if not os.path.exists(speaker.PROFILE):
-        print("профиля ещё нет, сначала запиши его без флагов")
+        print("there is no profile yet - record one first, with no flags")
         return
     warn_listener()
-    print("Скажи что-нибудь, как сказал бы Джарвису.")
-    input("Enter - и говори: ")
+    print("Say something, the way you would say it to him.")
+    input("Enter, then talk: ")
     audio = rec_take(5.0)
     ok, score, why = speaker.check(audio)
-    print(f"\n{'ПУСКАЮ' if ok else 'НЕ ПУСКАЮ'}: {why}")
+    print(f"\n{'LET THROUGH' if ok else 'REFUSED'}: {why}")
     # A live phrase is worth more than a seventh prompted take: it was said the
     # way he really says things, from wherever he really sits. Keeping the ones
     # that scored low is what widens the profile - a phrase that already passed
     # comfortably teaches it nothing.
-    if input("\nОставить эту фразу в профиле? [y/N] ").strip().lower() != "y":
+    if input("\nKeep this phrase in the profile? [y/N] ").strip().lower() != "y":
         return
     data = load()
     vecs = [np.asarray(v, dtype=np.float32) for v in data["samples"]]
@@ -392,10 +389,10 @@ def check() -> None:
     try:
         vecs.append(speaker.embed(audio))
     except Exception as e:
-        print(f"не смог посчитать отпечаток: {e}")
+        print(f"could not compute the print: {e}")
         return
-    labels = list(data["labels"]) + [input("Как назовём тейк? ").strip() or "живая"]
-    print("Пересчитываю черту...")
+    labels = list(data["labels"]) + [input("What shall we call this take? ").strip() or "live"]
+    print("Recomputing the line...")
     tvecs = []
     for label, a in other_voices():
         try:
@@ -407,15 +404,15 @@ def check() -> None:
 
 def report() -> None:
     if not os.path.exists(speaker.PROFILE):
-        print("профиля ещё нет")
+        print("there is no profile yet")
         return
     data = load()
     st = data.get("stats", {})
-    print(f"тейков: {len(data['samples'])} - {', '.join(data['labels'])}")
-    print(f"чужих голосов: {len(data.get('cohort', []))}")
-    print(f"порог узнавания: {data['floor']}, черта по отрыву: {data['margin']}")
-    print(f"худший свой тейк: {st.get('worst_self')}, его худший отрыв: "
-          f"{st.get('worst_gap')}, лучший отрыв чужого: {st.get('best_other_gap')} "
+    print(f"takes: {len(data['samples'])} - {', '.join(data['labels'])}")
+    print(f"cohort voices: {len(data.get('cohort', []))}")
+    print(f"recognition floor: {data['floor']}, margin line: {data['margin']}")
+    print(f"worst own take: {st.get('worst_self')}, its smallest gap: "
+          f"{st.get('worst_gap')}, cohort's best gap: {st.get('best_other_gap')} "
           f"({st.get('other_top')})")
 
 
@@ -430,6 +427,6 @@ if __name__ == "__main__":
     elif arg == "--rebuild":
         rebuild()
     elif arg == "--add":
-        enroll(only=sys.argv[2] if len(sys.argv) > 2 else "ещё")
+        enroll(only=sys.argv[2] if len(sys.argv) > 2 else "extra")
     else:
         enroll()

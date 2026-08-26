@@ -11,7 +11,7 @@ The last thing a session said comes from its transcript,
 
 Usage: agents_status.py [name-or-word ...]
 Without arguments - every session. With arguments - only those whose name,
-folder or last line matches, so "ревью" picks out the session doing a review.
+folder or last line matches, so "review" picks out the session doing one.
 """
 
 import json
@@ -27,9 +27,8 @@ PROJECTS = os.path.join(HOME, ".claude", "projects")
 # A room started by room.sh carries its own name, so its session name is
 # already the spoken word - only a window raised by hand in a known folder
 # needs mapping.
-ROLES = {
-    "claude-orchestrator": "шеф",
-}
+# Add your own here, or leave it empty and start rooms with room.sh.
+ROLES: dict[str, str] = {}
 # Jarvis himself: reporting his own session as an agent would be noise
 SELF_DIRS = {os.path.join(HOME, ".claude", "jarvis", "session")}
 # Big enough to hold a whole working session: a subagent spawned an hour ago is
@@ -76,7 +75,7 @@ def tail_events(sid: str, cwd: str) -> list[dict]:
 
 
 def subagents(events: list[dict]) -> list[dict]:
-    """Subagents this session spawned - the "агент по ревью" the owner asks about.
+    """Subagents this session spawned - the "review agent" the owner asks about.
 
     A subagent has no registry entry of its own: the only trace is the Agent
     tool call in the parent transcript. It is still running while no tool_result
@@ -94,7 +93,7 @@ def subagents(events: list[dict]) -> list[dict]:
             if part.get("type") == "tool_use" and part.get("name") in ("Agent", "Task"):
                 inp = part.get("input") or {}
                 calls[part.get("id")] = {
-                    "type": str(inp.get("subagent_type") or "агент"),
+                    "type": str(inp.get("subagent_type") or "agent"),
                     "what": " ".join(str(inp.get("description") or "").split())[:120],
                 }
             elif part.get("type") == "tool_result" and part.get("tool_use_id") in calls:
@@ -125,7 +124,7 @@ def last_lines(events: list[dict], limit: int = 2) -> list[str]:
                     said.append(part["text"])
                 elif part.get("type") == "tool_use":
                     # a tool call is often the only sign of what it is busy with
-                    said.append(f"[{part.get('name', 'инструмент')}]")
+                    said.append(f"[{part.get('name', 'tool')}]")
             text = " ".join(said)
         else:
             text = ""
@@ -140,13 +139,13 @@ def last_lines(events: list[dict], limit: int = 2) -> list[str]:
 
 def ago(ms: int) -> str:
     if not ms:
-        return "неизвестно когда"
+        return "at some unknown time"
     mins = int((time.time() - ms / 1000) / 60)
     if mins < 1:
-        return "только что"
+        return "just now"
     if mins < 60:
-        return f"{mins} мин назад"
-    return f"{mins // 60} ч {mins % 60} мин назад"
+        return f"{mins} min ago"
+    return f"{mins // 60} h {mins % 60} min ago"
 
 
 def unregistered() -> list[dict]:
@@ -176,15 +175,15 @@ def unregistered() -> list[dict]:
         folder = os.path.basename(cwd.rstrip("/")) or cwd
         out.append({
             "pid": int(pid),
-            "name": f"сессия в {folder}",
+            "name": f"session in {folder}",
             "cwd": cwd,
             "folder": folder,
             "role": ROLES.get(folder),
-            "status": "жив",
+            "status": "alive",
             "since": 0,
             "started": 0,
             # no session id, so there is no transcript to read
-            "said": ["не в реестре сессий, чем занят не видно"],
+            "said": ["not in the session registry, so what it is doing is not visible"],
             "subagents": [],
         })
     return out
@@ -210,7 +209,7 @@ def collect() -> list[dict]:
         events = tail_events(sid, cwd)
         out.append({
             "pid": pid,
-            "name": s.get("name") or f"сессия {pid}",
+            "name": s.get("name") or f"session {pid}",
             "cwd": cwd,
             "folder": os.path.basename(cwd.rstrip("/")) or cwd,
             "role": ROLES.get(os.path.basename(cwd.rstrip("/"))),
@@ -230,7 +229,7 @@ def matches(sess: dict, words: list[str]) -> bool:
     """Does this session look like the one the question is about?
 
     Compared by word stems, not by substring: the spoken word comes in any case
-    ("что с шефом"), while the registry holds the plain form ("шеф").
+    ("what is the chief up to"), while the registry holds the plain name.
     """
     if not words:
         return True
@@ -246,7 +245,7 @@ def matches(sess: dict, words: list[str]) -> bool:
 
 
 def microphone_line() -> str:
-    """Who holds the microphone - the answer to "в каком агенте включён Джарвис".
+    """Who holds the microphone - the answer to "which agent has Jarvis right now".
 
     The listener writes its pid and the name of the session that armed it, so the
     question is answerable without looking at the screen badge.
@@ -255,15 +254,15 @@ def microphone_line() -> str:
     try:
         pid = int(open(os.path.join(jarvis, "listener.pid")).read().strip())
     except (OSError, ValueError):
-        return "Микрофон свободен: режим Джарвиса не включён ни в одной сессии."
+        return "The microphone is free: no session has Jarvis switched on."
     if not alive(pid):
-        return "Микрофон свободен: слушатель числился, но процесс мёртв."
+        return "The microphone is free: a listener was on record, but its process is dead."
     try:
         owner = open(os.path.join(jarvis, "listener.owner")).read().strip()
     except OSError:
         owner = ""
-    who = f"сессия «{owner}»" if owner else f"процесс {pid}"
-    return f"Микрофон держит {who}, режим Джарвиса включён там."
+    who = f"session {owner!r}" if owner else f"process {pid}"
+    return f"The microphone is held by {who}, and Jarvis is switched on there."
 
 
 def main() -> None:
@@ -272,32 +271,32 @@ def main() -> None:
     sessions = collect()
     picked = [s for s in sessions if matches(s, words)]
     if not sessions:
-        print("Живых сессий Claude нет.")
+        print("No live Claude sessions.")
         return
     if not picked:
-        print(f"Под запрос ничего не подошло. Живых сессий: {len(sessions)} - "
+        print(f"Nothing matched the question. Live sessions: {len(sessions)} - "
               + ", ".join(f"{s['role'] or s['name']} ({s['status']})" for s in sessions))
         return
     for s in picked:
         who = s["role"] or s["name"]
-        state = {"busy": "работает", "idle": "простаивает"}.get(s["status"], s["status"])
-        head = f"{who} (папка {s['folder']}): {state}"
+        state = {"busy": "working", "idle": "idle"}.get(s["status"], s["status"])
+        head = f"{who} (dir {s['folder']}): {state}"
         if s["since"]:
-            head += f", с этим состоянием {ago(s['since'])}"
+            head += f", in that state since {ago(s['since'])}"
         print(head)
         for a in s["subagents"]:
-            state = "работает" if a["running"] else "закончил"
+            state = "working" if a["running"] else "finished"
             what = f" «{a['what']}»" if a["what"] else ""
-            print(f"  подагент {a['type']}{what}: {state}")
+            print(f"  subagent {a['type']}{what}: {state}")
         for line in s["said"]:
-            print(f"  последнее: {line}")
-    # a word that matched nothing is an answer too: "агента по ревью не вижу"
+            print(f"  last: {line}")
+    # a word that matched nothing is an answer too: "I see no review agent"
     missing = [w for w in words if not any(matches(x, [w]) for x in sessions)]
     if missing:
-        print("ничего не нашлось по словам: " + ", ".join(missing))
+        print("nothing matched these words: " + ", ".join(missing))
     skipped = len(sessions) - len(picked)
     if skipped > 0:
-        print(f"Остальные сессии ({skipped}): "
+        print(f"Other sessions ({skipped}): "
               + ", ".join(f"{s['role'] or s['name']} - {s['status']}"
                           for s in sessions if s not in picked))
 

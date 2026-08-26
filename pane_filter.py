@@ -3,7 +3,9 @@
 The pane holds tool calls, their sub-results, status hints and links. Reading all
 of that aloud is what made Jarvis narrate log noise and full URLs.
 """
+import os
 import re
+import sys
 
 CHROME = re.compile(
     r"^\s*(?:[─━═╭╮╯╰│┃┌┐└┘├┤┬┴┼╔╗╚╝║╞╡╪⎿↳]+"       # box drawing, tool sub-lines
@@ -26,7 +28,7 @@ BULLET = re.compile(r"^\s*[-–—•*]\s*")
 # A line with no letters at all is decoration, not speech. The chef answered with
 # a table on 20.08 and Jarvis read its borders out loud: "├─────────┼────────┼".
 LETTERS = re.compile(r"[^\W\d_]", re.UNICODE)
-# "⏺ Bash(...)" is a tool call, "⏺ Петров написал..." is the answer. Only the
+# "⏺ Bash(...)" is a tool call, "⏺ Petrov wrote..." is the answer. Only the
 # head of a block carries the bullet, so the last non-call bullet starts the
 # answer - everything above it is machinery. Without this cut the wrapped tail of
 # a shell command ("w) USERID=$(security find-generic-password ...") reached the
@@ -34,20 +36,22 @@ LETTERS = re.compile(r"[^\W\d_]", re.UNICODE)
 BLOCK_HEAD = re.compile(r"^\s*⏺\s+")
 TOOL_HEAD = re.compile(r"^\s*⏺\s+[A-Za-z_][\w .-]{0,30}\(")
 # Claude Code's own cross-session notices look like assistant speech but are
-# English machinery: "рокет is idle — finished a turn at 09:15 · «…»"
+# machinery: "<session> is idle - finished a turn at 09:15 · '...'"
 NOTICE = re.compile(r"\bis idle\b|finished a turn|Cross-session|cross-session")
 # The prompt glyph never appears in speech, but it does in the line the TUI draws
-# for an outgoing cross-session message: "@ рокет❯"
+# for an outgoing cross-session message: "@ <session>❯"
 PROMPTY = re.compile(r"❯")
+
+_SWAPS: tuple[tuple[str, str], ...] | None = None
 
 
 def answer_blocks(block: str) -> str:
     """Everything the agent said, tool calls and notices left behind.
 
     Taking only the LAST block used to lose the point: relaying a question
-    through the chef gives four blocks, and the useful one is in the middle
-    ("Рокет ответил: …"), while the last is housekeeping ("Сессия рокет
-    освободилась"). Checked on the pane of 20.08, 09:15.
+    through another room gives four blocks, and the useful one is in the middle
+    ("the chat agent answered: ..."), while the last is housekeeping ("that
+    session is free again"). Checked on the pane of 20.08, 09:15.
     """
     out, keep = [], False
     for line in block.replace("\r", "\n").split("\n"):
@@ -77,8 +81,25 @@ def speakable(block: str) -> str:
             continue
         out.append(line)
     text = re.sub(r"\s{2,}", " ", " ".join(out))
-    text = text.replace("°C", " градусов").replace("..", " до ")
+    # Symbols a voice reads badly. Which words replace them is a language
+    # matter, so the pairs live in locales/<lang>.toml, not here.
+    for symbol, word in _spoken_swaps():
+        text = text.replace(symbol, word)
     return text.strip()
+
+
+def _spoken_swaps() -> tuple[tuple[str, str], ...]:
+    """The locale's symbol->word pairs, or none if the locale will not load."""
+    global _SWAPS
+    if _SWAPS is None:
+        try:
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import lang
+
+            _SWAPS = lang.current().spoken_swaps
+        except Exception:
+            _SWAPS = ()
+    return _SWAPS
 
 
 def looks_like_shell(text: str) -> bool:
