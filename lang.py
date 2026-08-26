@@ -55,7 +55,7 @@ REQUIRED = (
 # wording of its own. Every one of these has a call site in the daemon, so a
 # locale missing one would answer with an empty sentence.
 REQUIRED_SAY = (
-    "action_failed", "ask_ack", "tell_ack", "room_missing", "room_relay",
+    "action_done", "action_failed", "ask_ack", "tell_ack", "room_missing", "room_relay",
     "room_fallback", "no_such_room", "room_silent", "room_answering",
     "session_down", "no_answer", "key_only",
 )

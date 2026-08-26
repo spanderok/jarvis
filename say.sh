@@ -4,7 +4,7 @@
 # Which voice speaks is the locale's business, not this script's: locales/en.toml
 # says piper, locales/ru.toml says vosk. JARVIS_BACKEND overrides for one run.
 #
-#   piper   local, one 63 MB file per voice, English and 30 more languages
+#   piper   local, one 60 MB file per voice, 51 languages available
 #   vosk    local vosk-tts 0.7 speaker 4, Russian, 0.9 s to first sound
 #   edge    Microsoft neural voices, needs internet, cached per phrase
 #   system  macOS `say -v <name>`, instant, offline, plainly a robot

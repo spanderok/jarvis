@@ -114,6 +114,7 @@ spoken_swaps = [
 # config/actions.toml. These are what he says when it does not.
 # {label} is the room's name, {relay} and {fallback} the rooms he went to instead.
 [say]
+action_done = "Done."
 action_failed = "That did not work."
 ask_ack = "Asked {label}."
 tell_ack = "Passed it to {label}."

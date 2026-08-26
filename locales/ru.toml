@@ -100,6 +100,7 @@ spoken_swaps = [
 # Each room and action can carry its own wording in config/rooms.toml and
 # config/actions.toml. These are what he says when it does not.
 [say]
+action_done = "Готово."
 action_failed = "Не получилось."
 ask_ack = "Спросил {label}."
 tell_ack = "Передал {label}."

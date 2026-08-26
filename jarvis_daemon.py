@@ -2883,7 +2883,8 @@ def main() -> None:
             return plugins.fill(action.prompt, q=phrase, facts=out)
         if action.speak == "stdout":
             speaker.say(plugins.format_output(action, out, action.argv(phrase),
-                                              JARVIS_DIR_PATH) or action.ok_say)
+                                              JARVIS_DIR_PATH)
+                        or action.ok_say or LANG.say("action_done"))
         return None
 
     def room_send(rid: str, question: str) -> bool:
