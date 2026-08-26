@@ -58,18 +58,12 @@ Env:
                          fastest, empty string keeps your CLI default
   JARVIS_TARGET=orch     send every question to the orchestrator window instead
                          of answering in Jarvis' own session (default: own)
-  JARVIS_ORCH_DIR        orchestrator project dir, default ~/claude-orchestrator
-  JARVIS_ORCH_NAME       display name of the orchestrator session, default
-                         "шеф" (chef.sh starts it with that name)
-  JARVIS_ROCKET_NAME     display name of the chat agent's session, default
-                         "рокет". Start it anywhere with `claude -n рокет` (see
-                         rocket.sh) - the window is found by that name, so the
-                         agent can sit inside a repository and see the code.
-                         Chat questions ("что в рокете", "что написал Петров")
-                         go to that window on their own; questions about agents
-                         are answered from ~/.claude/sessions by agents_status.py
-  JARVIS_ROCKET_DIR      optional fallback: find the chat agent by the folder its
-                         claude runs in. Empty by default
+  JARVIS_ROOMS           extra rooms: one .toml file or a directory of them,
+                         merged over config/rooms.toml (see plugins.py)
+  JARVIS_ACTIONS         the same for actions
+  JARVIS_ROOM_<ID>_SESSION, JARVIS_ROOM_<ID>_DIR
+                         override one room's session name or folder without
+                         editing its file, e.g. JARVIS_ROOM_CHIEF_SESSION
   JARVIS_ASLEEP=1        start quietly: no greeting, wake word ignored until a
                          key is pressed (kill -HUP toggles it later)
   JARVIS_ECHO_SETTLE     quiet pause after speaking before the mic is trusted,
@@ -98,6 +92,8 @@ import wave
 
 import numpy as np
 import sounddevice as sd
+
+import plugins
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pane_filter import looks_like_shell, speakable  # noqa: E402
@@ -313,8 +309,8 @@ DEBUG = os.environ.get("JARVIS_DEBUG") == "1"
 JARVIS_DIR = os.path.expanduser("~/.claude/jarvis")
 SESSION_DIR = os.environ.get("JARVIS_CWD", os.path.join(JARVIS_DIR, "session"))
 SAY = os.path.join(JARVIS_DIR, "say.sh")
-AGENTS_SCRIPT = os.path.join(JARVIS_DIR, "agents_status.py")
-STATE_FILE = pathlib.Path(JARVIS_DIR) / "state"
+JARVIS_DIR_PATH = pathlib.Path(JARVIS_DIR)
+STATE_FILE = JARVIS_DIR_PATH / "state"
 # Signed peaks of the microphone, published for the overlay to draw. The overlay
 # has no microphone of its own - there is one, and this process holds it - so the
 # only way the badge can show the real signal is if we hand it over. One line,
@@ -432,43 +428,23 @@ STOP_WORDS = {"стоп", "отбой", "ничего", "отмена", "заб�
 # say one of these and the rest of the sentence goes to the orchestrator window
 # The orchestrator answers to three names. Bare ones ("шеф", "агент",
 # "оркестратор") only count at the start of a sentence, see split_forward.
-FORWARD_ASK = ("спроси шефа", "спроси у шефа", "узнай у шефа",
-               "спроси оркестратора", "спроси у оркестратора", "узнай у оркестратора",
-               "спроси агента", "спроси у агента", "узнай у агента")
-FORWARD_TELL = ("передай шефу", "скажи шефу", "поручи шефу", "пусть шеф", "шеф",
-                "передай оркестратору", "скажи оркестратору", "поручи оркестратору",
-                "пусть оркестратор", "оркестратор",
-                "передай агенту", "скажи агенту", "поручи агенту", "пусть агент",
-                "агент")
 RESET_WORDS = {"новый разговор", "начнём заново", "забудь всё", "с чистого листа"}
-# Two kinds of question Jarvis routes on his own, without "передай шефу":
-#   chat   -> the rocket agent window, it owns the rocketchat skill
-#   agents -> agents_status.py, the registry of live Claude sessions
-# Matched against normalize(): lower case, letters and spaces only.
-# Only an outright mention of the chat sends a question to the rocket agent:
-# "посмотри в рокете", "передай в рокет". Guessing by words like "непрочитанное"
-# or "кто мне писал" sent ordinary questions there, so it was dropped.
-CHAT_MENTION = re.compile(r"\bрокет|\bворкзон")
-# Same rule for agents: the question must name an agent, the chef or the
-# sessions, otherwise "как там ревью" hijacked a normal question about a review.
-AGENTS_PATTERNS = [re.compile(p) for p in (
-    r"\bагент\w*\b.{0,30}(статус|занят|дела|делает|работает|закончил|готов|где|что)",
-    r"(статус|что|как|чем|где)\w*\b.{0,30}\bагент",
-    r"(статус|сводк\w*)\b.{0,20}(по )?(работ|сесси)",
-    r"(чем занят|что делает|что с|как там)\b.{0,15}(шеф|оркестратор)",
-    r"все агенты|по агентам|мои агенты",
-)]
-# words in an agent question that say nothing about which session is meant
-AGENT_STOPWORDS = {
-    "агент", "агенты", "агентом", "агентами", "агентов", "агенте", "агента",
-    "статус", "статусы", "работе", "работа", "работы", "сессия", "сессии",
-    "сессий", "сессиям", "что", "как", "чем", "где", "дай", "там", "занят",
-    "занята", "делает", "дела", "делают", "готов", "закончил", "мои", "все",
-    "сейчас", "мне", "покажи", "расскажи", "происходит",
-}
-# Whose assistant this is. Only the name is personal, so it lives in one env
-# var instead of being sewn into every prompt. Empty: Jarvis speaks of "the owner
-# of this computer" and never uses a name.
+
+# Where a phrase can go, and what it can set off, is declared in TOML and not
+# here: config/rooms.toml, config/actions.toml, plus whatever you drop into
+# rooms.d/ and actions.d/. plugins.py documents the format, and
+# `jarvis_daemon.py --selfcheck` runs the routing examples written next to each
+# room and action.
+#
+# A broken config stops the daemon rather than starting it with half the routes.
+# A question that silently stops reaching the agent it was meant for is worse
+# than one that was never asked: nobody notices for days.
+try:
+    CFG = plugins.load()
+except plugins.ConfigError as _cfg_error:
+    print(f"jarvis: {_cfg_error}", file=sys.stderr)
+    raise SystemExit(2)
+
 OWNER = os.environ.get("JARVIS_OWNER", "").strip()
 _OWNER_INTRO = (f"служишь не Старку, а хозяину этого компьютера, его зовут {OWNER}. "
                 if OWNER else "служишь не Старку, а хозяину этого компьютера. ")
@@ -488,16 +464,9 @@ SYSTEM_PROMPT = (
     "Отвечай по-русски, одним-тремя предложениями, живой речью: никакого "
     "markdown, списков, кода, ссылок и идентификаторов. Числа и номера тикетов "
     "произноси словами. "
-    "Тяжёлую работу - ревью, правки кода, деплой, разбор тикетов - выполняет "
-    "рабочий агент, хозяин зовёт его шефом. Если просьба про это, скажи, что "
-    "передашь, и попроси произнести «передай шефу» с задачей. "
-    "Про работу агентов ты отвечаешь сам: нужные данные тебе дают вместе с "
-    "вопросом, просить их у хозяина не надо. "
-    "Свежие сведения из интернета - курс, погода, новость, версия библиотеки - "
-    "ищи сам поиском по вебу и отвечай числом или фактом, а не отговоркой. "
-    "В чаты (Rocket.Chat) ходит отдельный агент, и только по прямой просьбе. "
-    "Спросили про переписку или непрочитанное - скажи, что сам туда не смотришь, "
-    "и попроси произнести «посмотри в рокете» с вопросом."
+    # What he is told about his rooms and actions lives next to them, so that
+    # renaming a room or deleting an action rewrites this prompt with it.
+    + CFG.hints()
 )
 
 
@@ -509,13 +478,6 @@ RELAY_ASK = ('(ответ пойдёт в голос: три-четыре пре
              '«{peer}» и перескажи её ответ. Про то, что отправил вопрос, не '
              'отчитывайся - Джарвис озвучивает каждую твою реплику, и лишняя '
              'строка звучит как ложный ответ. Напиши один раз, по делу: {q}')
-# The registry lines are facts, not speech: Jarvis retells them in his own voice.
-AGENTS_PROMPT = (
-    "Хозяин спросил про работу агентов: «{q}»\n\n"
-    "Реестр живых сессий Claude на этой машине, снят только что:\n{facts}\n\n"
-    "Перескажи голосом: кто чем занят и как давно. Без путей, имён файлов и "
-    "идентификаторов. Если вопрос про одного агента - говори только про него."
-)
 # An agent's answer is read off its screen and spoken as it is, so every question
 # asked by voice carries this mark. Without it the chef answered "какие сессии
 # активны" with an ASCII table and Jarvis read its borders out loud.
@@ -1001,30 +963,14 @@ def strip_wake(text: str) -> str:
     return " ".join(words).lstrip(" ,.!?-").strip()
 
 
-def split_forward(command: str) -> tuple[str, str, str]:
-    """Return ("ask"|"tell"|"", task, phrase) - what to hand to the orchestrator.
+def split_forward(command: str) -> tuple[str, str, str, str]:
+    """Explicit addressing: ("ask"|"tell"|"", room id, task, the wording used).
 
-    The phrase comes back so the caller can tell an order ("передай шефу ...")
+    The wording comes back so the caller can tell an order ("передай шефу ...")
     from a bare name ("шеф ..."): only an order outranks the automatic routes.
-
-    Bare names ("лид", "оркестратор") only count at the very start of the
-    sentence and as whole words, otherwise "лидер мнений" would be handed over.
+    The words themselves are in config/rooms.toml, one list per room.
     """
-    low = command.lower()
-    for kind, phrases in (("ask", FORWARD_ASK), ("tell", FORWARD_TELL)):
-        for phrase in phrases:
-            if " " in phrase:
-                m = re.search(r"\b" + re.escape(phrase) + r"\b", low)
-            else:
-                # a hyphen must not count as a word break, or "шеф-повар" would
-                # be read as an order to the boss
-                m = re.match(r"\s*" + re.escape(phrase) + r"(?=[\s,.:;!?]|$)", low)
-            if not m:
-                continue
-            task = command[m.end():].lstrip(" ,:;-").strip()
-            if task:
-                return kind, task, phrase
-    return "", "", ""
+    return CFG.address(command)
 
 
 # the owner speaks Russian. On music and room noise parakeet hallucinates fluent
@@ -1037,93 +983,14 @@ def normalize(text: str) -> str:
     return " ".join(re.sub(r"[^а-яёa-z ]", "", text.lower()).split())
 
 
-# Music is handled here, in this process, and never as a Claude tool call. The
-# alternative was allowing the daemon `Bash` for two Spotify commands - rejected
-# on 22.08: Bash is all or nothing, and a page the daemon reads could then talk
-# it into running something else. A fixed route cannot be talked into anything.
-MUSIC_PATTERNS = [re.compile(p) for p in (
-    r"\b(?:по)?громче\b", r"\b(?:по)?тише\b",
-    r"\bследующ\w*\s+(?:трек|песн\w+|композиц\w+)",
-    r"\bпредыдущ\w*\s+(?:трек|песн\w+|композиц\w+)",
-    r"\bпереключи\b.*\b(?:трек|песн\w+|музык\w+)",
-    r"\bвыключи\s+музык", r"\bвключи\s+музык",
-    r"\bпоставь\s+(?:на\s+)?паузу\b",
-    r"\bчто\s+(?:сейчас\s+)?(?:играет|за\s+трек|за\s+песня)",
-)]
-MUSIC_SCRIPT = os.path.expanduser("~/.claude/skills/spotify/spotify.sh")
-
-
-def music_command(norm: str) -> list[str] | None:
-    """Which spotify.sh command this phrase means, or None if it is not music."""
-    if not any(rx.search(norm) for rx in MUSIC_PATTERNS):
-        return None
-    if re.search(r"\bпогромче\b|\bгромче\b", norm):
-        return ["vol", "+10"]
-    if re.search(r"\bпотише\b|\bтише\b", norm):
-        return ["vol", "-10"]
-    if re.search(r"\bследующ", norm):
-        return ["next"]
-    if re.search(r"\bпредыдущ", norm):
-        return ["prev"]
-    if re.search(r"\bпаузу\b|\bвыключи\s+музык", norm):
-        return ["pause"]
-    if re.search(r"\bвключи\s+музык", norm):
-        return ["play"]
-    if re.search(r"\bчто\s", norm):
-        return ["state"]
-    return ["state"]
-
-
-def music_say(argv: list[str]) -> str:
-    """Run one spotify.sh command and turn its output into a spoken line."""
-    try:
-        r = subprocess.run(["bash", MUSIC_SCRIPT, *argv],
-                           capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        log(f"spotify failed: {e}")
-        return "Плеер не отвечает."
-    out = r.stdout.strip()
-    if not out:
-        return "Готово."
-    fields = dict(l.split(": ", 1) for l in out.splitlines() if ": " in l)
-    if argv[0] == "vol":
-        return out.splitlines()[-1].replace("громкость:", "громкость")
-    if "трек" in fields:
-        who = fields.get("исполнитель", "")
-        return f"{fields['трек']}" + (f", {who}" if who else "")
-    return out.splitlines()[0]
-
 
 def route_auto(norm: str) -> str:
-    """Automatic destination for this question: "agents", "chat" or nothing."""
-    if any(rx.search(norm) for rx in AGENTS_PATTERNS):
-        return "agents"
-    if CHAT_MENTION.search(norm):
-        return "chat"
-    if music_command(norm):
-        return "music"
-    return ""
+    """Automatic destination for this phrase: an action id, a room id, or "".
 
-
-def agent_filter_words(question: str) -> list[str]:
-    """Words that narrow an agent question down to one session, if there are any."""
-    words = [w for w in re.findall(r"[а-яёa-z]{3,}", question.lower())
-             if w not in AGENT_STOPWORDS]
-    return words[:3]
-
-
-def agents_facts(words: list[str]) -> str:
-    """What the live Claude sessions are doing - read straight off the registry."""
-    try:
-        r = subprocess.run([sys.executable, AGENTS_SCRIPT, *words],
-                           capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        log(f"agents_status failed: {e}")
-        return ""
-    if r.returncode != 0:
-        log(f"agents_status exit {r.returncode}: {r.stderr.strip()[:200]}")
-        return ""
-    return r.stdout.strip()
+    Actions win over rooms, and both lose to explicit addressing, which the
+    caller resolves first. Order inside each group is the order of the config.
+    """
+    return CFG.route(norm)
 
 
 MEDIA_ON = os.environ.get("JARVIS_MEDIA", "1") == "1"
@@ -1847,19 +1714,15 @@ def transcribe(audio: np.ndarray, trigger=None) -> str | None:
     return fixed
 
 
-ORCH_DIR = os.environ.get("JARVIS_ORCH_DIR",
-                          os.path.expanduser("~/claude-orchestrator"))
-# chef.sh starts it as `claude -n шеф`; the folder stays as a fallback for a
-# window that was raised by hand without the name
-ORCH_NAME = os.environ.get("JARVIS_ORCH_NAME", "шеф")
-# The chat agent: an always-on Claude session started as `claude -n рокет`.
-# Addressed by that name and not by its folder, so it can live in any repository
-# and still be found - the owner keeps it inside the code they work on.
-ROCKET_NAME = os.environ.get("JARVIS_ROCKET_NAME", "рокет")
-# Optional second way to find it: the folder its claude runs in. Empty by
-# default - looking for a folder that is never there costs a window scan per
-# question.
-ROCKET_DIR = os.environ.get("JARVIS_ROCKET_DIR", "")
+# The room a question goes to when nothing else claimed it, and the one
+# `target()` falls back on. It is the first room in the config - not a special
+# kind of room, just the first row.
+MAIN_ROOM = CFG.room(CFG.default_room) or (CFG.rooms[0] if CFG.rooms else None)
+# Kept as plain names because they are default arguments further down: the
+# window is found by the session name, and by the folder only as a fallback for
+# a window someone raised by hand without a name.
+ORCH_NAME = MAIN_ROOM.env_session() if MAIN_ROOM else ""
+ORCH_DIR = MAIN_ROOM.env_dir() if MAIN_ROOM else ""
 SESSIONS_DIR = os.path.expanduser("~/.claude/sessions")
 ORCH_SETTLE_SEC = 1.5
 # Lines the TUI draws around the conversation: tool calls, their sub-results and
@@ -2985,8 +2848,68 @@ def main() -> None:
     trigger = Trigger()
     trigger.install()
     speaker = Speaker(trigger)
-    orch = Orchestrator(trigger, speaker, ORCH_DIR, "шеф", ORCH_NAME)
-    rocket = Orchestrator(trigger, speaker, ROCKET_DIR, "рокет", ROCKET_NAME)
+    # One typist per room. Nothing here knows what any of them is for - that is
+    # in config/rooms.toml, and adding a room adds an entry to this dict.
+    rooms = {r.id: Orchestrator(trigger, speaker, r.env_dir(), r.label,
+                                r.env_session())
+             for r in CFG.rooms}
+    orch = rooms.get(MAIN_ROOM.id) if MAIN_ROOM else None
+
+    def run_action(action, phrase: str) -> str | None:
+        """Run one action. Returns text for Jarvis to retell, or None when done.
+
+        None means the action has already had its say - either it spoke its own
+        output, or it was told to stay silent. Only speak = "retell" comes back
+        with something, because only that needs his voice on top.
+        """
+        out = plugins.run_action(action, phrase, JARVIS_DIR_PATH, log)
+        if out is None or (action.speak == "retell" and not out):
+            speaker.say(action.fail_say or "Не получилось.")
+            return None
+        if action.speak == "retell":
+            return plugins.fill(action.prompt, q=phrase, facts=out)
+        if action.speak == "stdout":
+            speaker.say(plugins.format_output(action, out, action.argv(phrase),
+                                              JARVIS_DIR_PATH) or action.ok_say)
+        return None
+
+    def room_send(rid: str, question: str) -> bool:
+        """Ask room `rid`, going through its relay and its fallback if needed.
+
+        Returns False only when none of the three could be reached; whatever
+        Jarvis says about it is the room's own line from the config.
+        """
+        room, dest = CFG.room(rid), rooms.get(rid)
+        if room is None or dest is None:
+            return False
+        if dest.send_and_watch(VOICE_ASK.format(q=question), watch):
+            speaker.say(plugins.fill(room.ack_ask or "Спросил {label}.",
+                                     label=room.label))
+            return True
+        # the session is up but has no window of its own - started inside
+        # another Claude session, or in an IDE pane - so a room that can reach
+        # it by cross-session message is asked to relay
+        relay = rooms.get(room.relay_via)
+        if (relay is not None and room.env_session()
+                and session_alive(room.env_session())
+                and relay.send_and_watch(
+                    RELAY_ASK.format(peer=room.env_session(), q=question), watch)):
+            speaker.say(plugins.fill(
+                room.ack_relay or "{label} не в окне терминала, спрошу через {relay}.",
+                label=room.label, relay=CFG.room(room.relay_via).label))
+            return True
+        spare = rooms.get(room.fallback)
+        if spare is not None and spare.send_and_watch(
+                VOICE_ASK.format(q=question), watch):
+            speaker.say(plugins.fill(
+                room.ack_fallback or "{label} не нашёл, спросил {fallback}.",
+                label=room.label, fallback=CFG.room(room.fallback).label))
+            return True
+        speaker.say(plugins.fill(room.ack_missing or "Окно {label} не найдено.",
+                                 label=room.label,
+                                 fallback=(CFG.room(room.fallback).label
+                                           if CFG.room(room.fallback) else "")))
+        return False
     watch = AgentWatch(speaker, trigger)
     # Jarvis answers himself; the orchestrator is reached by asking for it
     own_only = os.environ.get("JARVIS_TARGET", "own") != "orch"
@@ -2999,7 +2922,7 @@ def main() -> None:
         Checked per question: the window usually opens a moment after the daemon.
         """
         nonlocal private
-        if not own_only and orch.available():
+        if not own_only and orch is not None and orch.available():
             if last_target[0] != "orch":
                 last_target[0] = "orch"
                 log(f"talking to the orchestrator window {orch.wid} - "
@@ -3027,23 +2950,25 @@ def main() -> None:
                 continue
             log(f"typed: {text!r}")
             # typed questions follow the same routes as spoken ones, otherwise
-            # "что в рокете" typed in this window would land in the wrong session.
+            # a question typed in this window would land in the wrong session.
             # No key gate here on purpose: typing into the daemon's own window is
             # already the owner's hands on their own keyboard - the same proof a key is.
-            kind, task, phrase = split_forward(text)
+            kind, room_id, task, phrase = split_forward(text)
             auto = "" if (kind and " " in phrase) else route_auto(normalize(text))
-            if auto == "agents":
-                facts = agents_facts(agent_filter_words(text))
-                reply = (target().exchange(AGENTS_PROMPT.format(q=text, facts=facts),
-                                          source="typed") if facts else
-                         "Реестр сессий не прочитался.")
-            elif auto == "chat" and rocket.available():
-                reply = rocket.exchange(VOICE_ASK.format(q=text), source="typed")
-            elif kind == "tell" and orch.available():
-                orch.send_only(task)
-                reply = "Передал оркестратору."
-            elif kind and orch.available():
-                reply = orch.exchange(task, source="typed")
+            action = CFG.action(auto)
+            dest = rooms.get(room_id)
+            if action is not None:
+                retell = run_action(action, text)
+                reply = (target().exchange(retell, source="typed")
+                         if retell is not None else "")
+            elif auto in rooms and rooms[auto].available():
+                reply = rooms[auto].exchange(VOICE_ASK.format(q=text), source="typed")
+            elif kind == "tell" and dest is not None and dest.available():
+                dest.send_only(task)
+                reply = plugins.fill(CFG.room(room_id).ack_tell or "Передал {label}.",
+                                     label=CFG.room(room_id).label)
+            elif kind and dest is not None and dest.available():
+                reply = dest.exchange(task, source="typed")
             else:
                 reply = target().exchange(text, source="typed")
             if reply:
@@ -3181,14 +3106,14 @@ def main() -> None:
                 continue
 
             log(f"command: {command!r}")
-            kind, task, phrase = split_forward(command)
+            kind, room_id, task, phrase = split_forward(command)
             # only the daemon gates this: in --listen mode the agent session
             # decides for itself, and it already knows how it was woken
             auto_peek = "" if (kind and " " in phrase) else route_auto(norm)
             # Everything that leaves this process for another agent goes through
-            # the same gate: the chief, and the chat route too - it asks the
-            # rocket session, which can post messages other people read.
-            reaches_agents = bool(kind) or auto_peek == "chat"
+            # the same gate, an automatic route included: a room can be a session
+            # that posts messages other people then read.
+            reaches_agents = bool(kind) or auto_peek in rooms
             if (reaches_agents and FORWARD_NEEDS_KEY and not LISTEN_ONLY
                     and not trigger.woke_by_key()):
                 log("передача другому агенту отклонена - разбудили словом, "
@@ -3201,38 +3126,21 @@ def main() -> None:
             # gives way to the automatic routes below
             explicit = bool(kind) and " " in phrase
             auto = "" if explicit else route_auto(norm)
-            if auto == "agents":
-                log(f"agent question, reading the session registry: {command!r}")
-                facts = agents_facts(agent_filter_words(command))
-                if not facts:
-                    speaker.say("Реестр сессий не прочитался, посмотри лог демона.")
+            action = CFG.action(auto)
+            if action is not None:
+                log(f"action {action.id}: {command!r}")
+                retell = run_action(action, command)
+                if retell is None:
                     speaker.wait()
                     speaker.settle()
                     flush(audio_q)
+                    engine.reset()
+                    follow_up = FOLLOWUP_SEC > 0
                     continue
-                reply = target().exchange(AGENTS_PROMPT.format(q=command, facts=facts))
-            elif auto == "music":
-                argv = music_command(norm)
-                log(f"music: {command!r} -> spotify.sh {' '.join(argv)}")
-                speaker.say(music_say(argv))
-                speaker.wait()
-                speaker.settle()
-                flush(audio_q)
-                engine.reset()
-                follow_up = FOLLOWUP_SEC > 0
-                continue
-            elif auto == "chat":
-                log(f"chat question -> the rocket agent: {command!r}")
-                if rocket.send_and_watch(VOICE_ASK.format(q=command), watch):
-                    speaker.say("Спросил рокет.")
-                elif session_alive(ROCKET_NAME) and orch.send_and_watch(
-                        RELAY_ASK.format(peer=ROCKET_NAME, q=command), watch):
-                    # the session is up but has no window of its own
-                    speaker.say("Рокет не в окне терминала, спрошу его через шефа.")
-                elif orch.send_and_watch(VOICE_ASK.format(q=command), watch):
-                    speaker.say("Рокета не нашёл, спросил шефа.")
-                else:
-                    speaker.say("Ни рокета, ни шефа не нашёл - подними рокет.")
+                reply = target().exchange(retell)
+            elif auto in rooms:
+                log(f"routed to room {auto!r}: {command!r}")
+                room_send(auto, command)
                 speaker.wait()
                 speaker.settle()
                 flush(audio_q)
@@ -3240,18 +3148,18 @@ def main() -> None:
                 follow_up = FOLLOWUP_SEC > 0
                 continue
             elif kind:
-                if kind == "tell":
-                    log(f"handing over to the chef: {task!r}")
-                    if orch.send_only(task):
-                        speaker.say("Передал шефу.")
-                    else:
-                        speaker.say("Окно шефа не найдено.")
+                room, dest = CFG.room(room_id), rooms.get(room_id)
+                if dest is None:
+                    speaker.say("Такой комнаты нет.")
+                elif kind == "tell":
+                    log(f"handed to room {room_id!r}: {task!r}")
+                    speaker.say(plugins.fill(
+                        (room.ack_tell or "Передал {label}.") if dest.send_only(task)
+                        else (room.ack_missing or "Окно {label} не найдено."),
+                        label=room.label))
                 else:
-                    log(f"asking the chef: {task!r}")
-                    if orch.send_and_watch(VOICE_ASK.format(q=task), watch):
-                        speaker.say("Спросил шефа.")
-                    else:
-                        speaker.say("Окно шефа не найдено.")
+                    log(f"asked room {room_id!r}: {task!r}")
+                    room_send(room_id, task)
                 speaker.wait()
                 speaker.settle()
                 flush(audio_q)
@@ -3286,39 +3194,31 @@ if __name__ == "__main__":
         silence = np.zeros(eng.frame_len, dtype=np.int16)
         print(f"selfcheck ok, engine: {eng.name}, detect(silence)={eng.detect(silence)}")
         print("strip_wake:", repr(strip_wake("Джарвис, сколько будет дважды два?")))
-        cases = [
-            ("посмотри в рокете, что написал Петров", "chat"),
-            ("передай в рокет, что я прочитал", "chat"),
-            ("что там в рокете", "chat"),
-            ("дай сводку по рокет чату", "chat"),
-            ("что с агентом по ревью", "agents"),
-            ("что с агентом тесты", "agents"),
-            ("дай статус по работе агентов", "agents"),
-            ("чем занят шеф", "agents"),
-            # эти вопросы Джарвис отвечает сам: чата в них нет
-            ("дай сводку по чату", ""),
-            ("что по непрочитанным сообщениям", ""),
-            ("что написал Петров", ""),
-            ("как там ревью", ""),
-            ("что я написал в тикете", ""),
-            ("сколько будет дважды два", ""),
-            ("напомни, что я хотел сделать вечером", ""),
-        ]
+        # The routing examples live next to the room or action they belong to,
+        # in config/rooms.toml and config/actions.toml. Add a room, add its
+        # examples, and this check covers it without being edited.
+        cases = [(ph, want) for src in (*CFG.rooms, *CFG.actions)
+                 for ph, want in src.examples]
         bad = [(q, want, route_auto(normalize(q))) for q, want in cases
                if route_auto(normalize(q)) != want]
         print(f"routing: {len(cases) - len(bad)}/{len(cases)} ok"
               + ("" if not bad else f", промахи: {bad}"))
         # an order must outrank the automatic routes
-        k, task, phrase = split_forward("передай шефу непрочитанное в рокете")
-        print(f"forward: kind={k!r} explicit={' ' in phrase} task={task!r}")
-        wid = find_window_by_name(ORCH_NAME) or orch_find_window(ORCH_DIR)
-        print(f"окно шеф (имя сессии «{ORCH_NAME}», папка {ORCH_DIR}): "
-              f"{wid or 'не найдено'}")
-        wid = find_window_by_name(ROCKET_NAME) or (
-            orch_find_window(ROCKET_DIR) if ROCKET_DIR else "")
-        print(f"окно рокет (имя сессии «{ROCKET_NAME}»): {wid or 'не найдено'}")
-        for pid in session_pids(ROCKET_NAME):
-            print(f"  сессия «{ROCKET_NAME}»: pid {pid}")
+        for probe in (f"{w} проверка связи"
+                      for r in CFG.rooms for w in (r.tell[:1] or r.bare[:1])):
+            k, rid, task, phrase = split_forward(probe)
+            print(f"forward: {probe!r} -> kind={k!r} room={rid!r} "
+                  f"explicit={' ' in phrase} task={task!r}")
+        for room in CFG.rooms:
+            name, folder = room.env_session(), room.env_dir()
+            wid = (find_window_by_name(name) if name else "") or (
+                orch_find_window(folder) if folder else "")
+            print(f"комната «{room.id}» (сессия {name or '-'}, папка {folder or '-'}): "
+                  f"{wid or 'окно не найдено'}")
+            for pid in (session_pids(name) if name else []):
+                print(f"  сессия «{name}»: pid {pid}")
+        for action in CFG.actions:
+            print(f"действие «{action.id}»: {action.speak}, {action.run or '-'}")
         print(f"silence={SILENCE_SEC}s followup={FOLLOWUP_SEC}s "
               f"double_tap={DOUBLE_TAP_SEC}s "
               f"tap={os.environ.get('JARVIS_TAP_KEYS', DEFAULT_TAP_KEYS)} "

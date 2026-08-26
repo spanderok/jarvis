@@ -1,0 +1,54 @@
+# Your own rooms. Copy this to rooms.d/anything.toml and edit - files ending
+# in .example.toml are documentation and are never loaded.
+#
+# Everything here is merged over config/rooms.toml by id, so this file can add
+# a room, change one field of a shipped room, or switch one off.
+
+# --- a new room -------------------------------------------------------------
+# Start it once with `bash room.sh notes`, then say "спроси заметки, что я
+# записал про отпуск".
+[[room]]
+id = "notes"
+label = "заметки"
+session = "заметки"                 # claude -n заметки
+work_dir = "~/notes"
+launch = "room.sh notes"
+tint = "honeydew"
+
+ask = ["спроси заметки", "спроси у заметок", "узнай у заметок"]
+tell = ["передай в заметки", "запиши в заметки"]
+bare = ["заметки"]
+
+ack_ask = "Спросил заметки."
+ack_tell = "Записал."
+ack_missing = "Окно заметок не найдено."
+
+# Say "в заметках" anywhere in a sentence and it comes here with no "спроси" in
+# front. Leave this out until you are sure the word is never said by accident -
+# an automatic route that fires on an ordinary question is worse than typing
+# two extra words.
+# mention_patterns = ['\bв заметк\w*']
+
+[[room.example]]
+phrase = "спроси заметки что я записал про отпуск"
+route = ""      # explicit addressing is resolved before routing, so "" is right
+[[room.example]]
+phrase = "сколько будет дважды два"
+route = ""
+
+
+# --- changing a shipped room ------------------------------------------------
+# Only the fields you name are touched; the rest stay as config/rooms.toml has
+# them. Switching the chat room on takes exactly this much:
+#
+# [[room]]
+# id = "chat"
+# enabled = true
+# session = "слак"
+# mention_patterns = ['\bслак\w*']
+
+
+# --- switching one off ------------------------------------------------------
+# [[room]]
+# id = "chief"
+# enabled = false

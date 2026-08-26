@@ -1,21 +1,22 @@
 #!/bin/zsh
 # Siri entry point. Three Terminal windows on purpose:
-#   window 1 - the orchestrator: interactive Claude Code named "шеф", started by
-#              chef.sh in ~/claude-orchestrator
-#   window 2 - the rocket agent: interactive Claude Code named "рокет", started
-#              by rocket.sh in front-casino so it sees both the chats and the
-#              code. Chat questions go straight there, so a long digest never
-#              blocks the orchestrator and never eats its context
+#   window 1 - the working agent: interactive Claude Code, started by
+#              `room.sh chief` in the folder its room names
+#   window 2 - a second room, one per narrow job - here the one that reads
+#              chats, started by `room.sh chat` in a repository so it sees both
+#              the messages and the code. Chat questions go straight there, so a
+#              long digest never blocks the working agent or eats its context.
+#              Which rooms exist is config/rooms.toml, not this file
 #   window 3 - Jarvis, asleep until a key activates him; he types your voice
 #              into whichever window the question belongs to
 # Terminal is used instead of a background process so that microphone and
 # input-monitoring permissions belong to Terminal, not to the uv binary.
 # Full paths everywhere: Shortcuts does not run a login shell.
 
-ORCH_DIR="$HOME/claude-orchestrator"
-ORCH_NAME="${JARVIS_ORCH_NAME:-шеф}"
-ROCKET_NAME="${JARVIS_ROCKET_NAME:-рокет}"
 JARVIS_DIR="$HOME/.claude/jarvis"
+# Which rooms exist, and what each is called, comes out of config/rooms.toml.
+ROOMS="$(python3 "$JARVIS_DIR/plugins.py" rooms 2>/dev/null)"
+room_field() { python3 "$JARVIS_DIR/plugins.py" get "$1" "$2" 2>/dev/null; }
 UV=$(command -v uv || echo /opt/homebrew/bin/uv)
 
 # --- window handling --------------------------------------------------------
@@ -125,20 +126,22 @@ start_jarvis_window() {
 }
 
 # --- raise what is missing --------------------------------------------------
-if session_named_alive "$ORCH_NAME" || claude_running_in "$ORCH_DIR"; then
-  started="шеф уже был"
-else
-  run_in_terminal "true; bash '$JARVIS_DIR/chef.sh'"
-  started="поднял шефа"
-fi
-
-if session_named_alive "$ROCKET_NAME"; then
-  started="$started, рокет уже был"
-else
-  run_in_terminal "true; bash '$JARVIS_DIR/rocket.sh'"
-  started="$started, поднял рокет"
-fi
-
+# One window per room, in the order the config lists them. Adding a room adds
+# a window here without this file being edited.
+started=""
+for room in $ROOMS; do
+  name="$(room_field "$room" session)"
+  label="$(room_field "$room" label)"
+  folder="$(room_field "$room" work_dir)"
+  if { [ -n "$name" ] && session_named_alive "$name"; } ||
+     { [ -n "$folder" ] && claude_running_in "$folder"; }; then
+    started="${started:+$started, }$label уже был"
+  else
+    run_in_terminal "true; bash '$JARVIS_DIR/room.sh' $room"
+    started="${started:+$started, }поднял $label"
+  fi
+done
+[ -n "$started" ] || started="комнат в конфиге нет"
 start_jarvis_window
 /usr/bin/osascript -e 'tell application "Terminal" to activate' \
   -e "display notification \"$started\" with title \"Джарвис\"" >/dev/null 2>&1
