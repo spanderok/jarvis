@@ -4,7 +4,7 @@
 # ///
 """Streaming edge-tts playback: start playing audio while it is still downloading.
 
-Usage: uv run speak_stream.py "текст"  (or text via stdin)
+Usage: uv run speak_stream.py "text"  (or text via stdin)
 Env:   JARVIS_EDGE_VOICE, JARVIS_EDGE_RATE, JARVIS_EDGE_PITCH, JARVIS_EDGE_VOLUME
        JARVIS_DEBUG=1 prints time to first audio chunk
 """

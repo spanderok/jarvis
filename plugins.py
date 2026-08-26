@@ -230,7 +230,10 @@ class Action:
     formatter: str = ""             # module:function turning stdout into one line
     hint: str = ""                  # the sentence Jarvis is told about this action
     fail_say: str = ""              # said when the command could not run
-    ok_say: str = "Готово."         # said when it ran but printed nothing
+    # Said when the command ran but printed nothing. Empty means "use the
+    # locale's line" - a default written here would be in one language for
+    # everybody, and this string is spoken out loud.
+    ok_say: str = ""
     timeout_s: float = 20.0
     examples: tuple[tuple[str, str], ...] = ()
     source: str = ""
@@ -286,7 +289,7 @@ def _action(entry: dict) -> Action:
         formatter=str(entry.get("formatter", "")),
         hint=str(entry.get("hint", "")),
         fail_say=str(entry.get("fail_say", "")),
-        ok_say=str(entry.get("ok_say", "Готово.")),
+        ok_say=str(entry.get("ok_say", "")),
         timeout_s=float(entry.get("timeout_s", 20)),
         examples=ex,
         source=str(entry.get("_from", "")),

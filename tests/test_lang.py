@@ -52,6 +52,7 @@ persona = "You are a butler, {owner_intro}Be brief."
 voice_ask = "(spoken) {q}"
 relay_ask = "ask {peer}: {q}"
 [say]
+action_done = "Done."
 action_failed = "No."
 ask_ack = "Asked {label}."
 tell_ack = "Told {label}."
@@ -231,3 +232,16 @@ def test_the_environment_picks_the_language(tmp_path, monkeypatch):
     write(tmp_path, COMPLETE, name="zz")
     monkeypatch.setenv("JARVIS_LANG", "zz")
     assert lang.current(tmp_path).lang == "zz"
+
+
+def test_no_spoken_line_is_hardcoded_in_the_router(tmp_path):
+    """plugins.py held a Russian "Готово." as an action's default, and said it.
+
+    Anything spoken belongs to a locale. This catches the next one that does
+    not, by reading the router itself rather than by trusting a review.
+    """
+    router = (REPO / "plugins.py").read_text(encoding="utf-8")
+    cyrillic = [line for line in router.splitlines()
+                if re.search(r"[Ѐ-ӿ]", line)
+                and not line.lstrip().startswith("#")]
+    assert not cyrillic, f"spoken text left in plugins.py: {cyrillic}"
