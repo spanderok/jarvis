@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Re-applies the key remap at every login: hidutil forgets it on reboot.
+     install.sh copies this to ~/Library/LaunchAgents with __HOME__ replaced. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.jarvis.keymap</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>__HOME__/.claude/jarvis/keymap.sh</string>
+		<string>on</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+</dict>
+</plist>

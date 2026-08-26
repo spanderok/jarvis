@@ -1,0 +1,55 @@
+# Models: 409 MB, downloaded by install.sh
+models/
+
+# Local Python env and caches
+venv-vosk/
+cache-vosk/
+cache/
+__pycache__/
+*.pyc
+
+# Personal settings
+jarvis.env
+
+# Voice print and enrolment recordings - biometrics, never publish
+voiceprint.json*
+cohort/
+rejected/
+wake-test/
+tts-demo/
+enrolled/
+
+# Secrets
+spotify_token
+spotify_user_token
+
+# Telegram: chat ids and incoming voice messages
+tg_open.jsonl
+tg_in/
+tg_inbox/
+
+# Logs hold transcripts of everything said near the microphone
+*.log
+spoken.log
+listener.log
+
+# Runtime state
+*.pid
+listener.owner
+last_played
+last_speaker
+last_spoken
+level
+speak_level
+state
+speak.stop
+answer.done
+overlay.pos
+tuning.json
+session/*
+!session/CLAUDE.md
+
+# Editor / OS
+.DS_Store
+*.bak
+*.bak-*
