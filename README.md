@@ -155,6 +155,42 @@ the microphone back, `/jarvis-daemon` returns it to the standalone daemon.
 There is one microphone, so only one of them can hold it. Both dropped in
 through the same file lock, and each tells you who it took it from.
 
+## Rooms and actions
+
+He answers most questions himself. The rest either go to a **room** - another
+Claude session in a Terminal window - or set off an **action**, a command that
+runs here and whose output he reads out.
+
+Say "передай шефу выкати демо" and the task is typed into the window of the
+session named `шеф`, where you can watch it work. Say "что сейчас играет" and
+nothing leaves the machine: a script runs and he names the track.
+
+Neither is built in. Both are rows in two TOML files:
+
+```toml
+# rooms.d/notes.toml
+[[room]]
+id = "notes"
+label = "заметки"
+session = "заметки"
+work_dir = "~/notes"
+launch = "room.sh notes"
+ask = ["спроси заметки", "спроси у заметок"]
+tell = ["запиши в заметки"]
+ack_ask = "Спросил заметки."
+```
+
+`bash room.sh notes` raises it and he can address it. Nothing else was edited -
+not the daemon, not the launcher, not his system prompt, which picks up the
+room's own `hint` line.
+
+The vocabulary is Russian because that is what he hears; the code holds none of
+it. Change the words and he speaks yours.
+
+**[docs/EXTENDING.md](docs/EXTENDING.md)** walks one question end to end, gives
+the order the routes are tried in, and explains the one field that will steal
+your ordinary questions if you set it carelessly.
+
 ## What else is in the box
 
 Optional pieces, each independent - ignore what you do not need.
@@ -166,7 +202,7 @@ Optional pieces, each independent - ignore what you do not need.
 | `overlay.sh` | floating badge showing listening / thinking / talking |
 | `status.sh` | menu bar indicator |
 | `tg_listen.py` | ask him from Telegram, by text or voice message |
-| `chef.sh`, `rocket.sh` | raise companion sessions he can hand work to |
+| `room.sh` | raise a companion session he can hand work to |
 | `enroll_voice.py` | record a voice print so he only answers you |
 | `mic_check.py`, `probe_key.py`, `why.sh` | diagnostics when something is off |
 

@@ -1,0 +1,58 @@
+# Your own actions. Copy this to actions.d/anything.toml and edit - files
+# ending in .example.toml are documentation and are never loaded.
+#
+# An action is answered here on the machine: it runs a command and Jarvis says
+# what came out. No room is involved and no tokens are spent.
+
+# --- the whole thing --------------------------------------------------------
+# Say "поставь таймер на десять минут" and the script gets ["10"].
+[[action]]
+id = "timer"
+patterns = ['^(?:поставь )?таймер (?:на )?(?P<minutes>\d+)']
+run = "actions.d/timer.sh {minutes}"
+speak = "stdout"
+ok_say = "Поставил."
+fail_say = "Таймер не завёлся."
+timeout_s = 5
+
+[[action.example]]
+phrase = "поставь таймер на десять минут"
+route = ""   # digits, not words - speech gives "десять", so this one is honest
+
+# Named groups in the pattern become {placeholders} in `run`. Everything else
+# about the command line is fixed, which is the point: a route that cannot be
+# rewritten by what was said cannot be talked into running something else.
+
+
+# --- one command, several wordings ------------------------------------------
+# `arg` rules pick the arguments, first match wins, `default_args` catches the
+# rest. See the music action in config/actions.toml for a worked example.
+
+
+# --- letting Jarvis retell the output ---------------------------------------
+# speak = "retell" hands stdout to him inside `prompt`, and he answers in his
+# own voice instead of reading the output aloud. Use it when the command prints
+# facts rather than sentences.
+#
+# [[action]]
+# id = "disk"
+# patterns = ['\bсколько места', '\bдиск заб']
+# run = "actions.d/disk.sh"
+# speak = "retell"
+# prompt = """Хозяин спросил: «{q}»
+#
+# Вывод df, снят только что:
+# {facts}
+#
+# Скажи одним предложением, сколько свободно и стоит ли беспокоиться."""
+
+
+# --- passing words from the question ----------------------------------------
+# [action.words] appends content words from the phrase after the fixed
+# arguments, so a script can know what was asked about without learning the
+# language. `stopwords` are the words that name nothing.
+#
+# [action.words]
+# limit = 3
+# min_len = 3
+# stopwords = ["что", "как", "где", "мне", "покажи"]

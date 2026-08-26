@@ -1,0 +1,124 @@
+# Rooms - where a heard phrase can be sent.
+#
+# A room is a Claude session in a Terminal window. Jarvis finds the window by
+# the session name (`claude -n <name>`), types the phrase into it as if you had
+# typed it, and reads the answer back off the screen.
+#
+# Nothing here is built in. Both rooms below are rows you can rename, disable
+# or delete, and a third one is a third row. Your own rooms belong in
+# rooms.d/*.toml, not in this file - it is overwritten by `git pull`.
+#
+# Every string is Russian because that is the language Jarvis hears. Change
+# them all and he addresses rooms in yours; the code holds no vocabulary.
+
+[defaults]
+# Where an unrouted phrase goes. Empty: Jarvis answers it himself, which is
+# what you want - a default room sends him every "what time is it" as well.
+room = ""
+
+
+# ---------------------------------------------------------------------------
+# The working agent. Jarvis has no tools of his own: reviews, edits, deploys
+# and ticket work all live here, and he hands them over on request.
+# ---------------------------------------------------------------------------
+[[room]]
+id = "chief"
+label = "шеф"
+session = "шеф"                  # JARVIS_ROOM_CHIEF_SESSION overrides
+work_dir = "~/claude-orchestrator"   # JARVIS_ROOM_CHIEF_DIR overrides
+launch = "room.sh chief"
+# Reachable from a phone or another machine, not only from this window.
+# Empty: no remote control.
+remote_control = "orchestrator"
+# A colour on the window, so two rooms are never mistaken for each other.
+tint = "khaki"
+
+# What Jarvis is told about this room, verbatim, in his system prompt. It lives
+# here and not in the prompt so that renaming the room renames it everywhere.
+hint = """Тяжёлую работу - ревью, правки кода, деплой, разбор тикетов - выполняет \
+рабочий агент, хозяин зовёт его шефом. Если просьба про это, скажи, что передашь, \
+и попроси произнести «передай шефу» с задачей."""
+
+# "Ask" waits for the answer and speaks it. "Tell" hands the task over and
+# forgets it - Jarvis says he passed it on and is free for the next question.
+ask = ["спроси шефа", "спроси у шефа", "узнай у шефа",
+       "спроси оркестратора", "спроси у оркестратора", "узнай у оркестратора",
+       "спроси агента", "спроси у агента", "узнай у агента"]
+tell = ["передай шефу", "скажи шефу", "поручи шефу", "пусть шеф",
+        "передай оркестратору", "скажи оркестратору", "поручи оркестратору",
+        "пусть оркестратор",
+        "передай агенту", "скажи агенту", "поручи агенту", "пусть агент"]
+
+# A bare name counts only at the start of the sentence and as a whole word, so
+# "шеф-повар новый" stays an ordinary question. It is weaker than an order:
+# automatic routes below outrank it, "передай шефу" outranks everything.
+bare = ["шеф", "оркестратор", "агент"]
+bare_kind = "tell"
+
+ack_tell = "Передал шефу."
+ack_ask = "Спросил шефа."
+ack_missing = "Окно шефа не найдено."
+
+
+# ---------------------------------------------------------------------------
+# A second agent for one narrow job - here, the one that reads and writes chats.
+# Off by default: it only makes sense once you have somewhere to point it.
+#
+# Read `mention_patterns` before you switch it on. That one line is where this
+# room earns its keep or ruins your day.
+# ---------------------------------------------------------------------------
+[[room]]
+id = "chat"
+label = "чат"
+enabled = false
+session = "чат"
+launch = "room.sh chat"
+# A repository with its own CLAUDE.md ignores a role file dropped in the
+# folder, so the role is appended to the system prompt instead.
+role_file = "roles/chat.md"
+tint = "lavender"
+hint = """В чаты ходит отдельный агент, и только по прямой просьбе. Спросили про \
+переписку или непрочитанное - скажи, что сам туда не смотришь, и попроси \
+произнести «посмотри в слаке» с вопросом."""
+
+# Automatic routing: these words send the phrase here from anywhere in the
+# sentence, with no "передай" in front.
+#
+# Name the thing, never the topic. An early version routed on "непрочитанное",
+# "сводка по чатам" and "кто мне писал", and ordinary questions kept ending up
+# in the chat agent - "что написал Петров" was about a commit. Replaced with
+# the product's own name, which nobody says by accident. Put yours here:
+# "слак", "телеграм", "дискорд". A bare "чат" is exactly the mistake described
+# above - it is the topic, not the name.
+mention_patterns = ['\bслак\w*']
+
+# When the session is alive but has no Terminal window of its own - started
+# inside another Claude session, or in an IDE pane - Jarvis cannot type into
+# it. This room can, by cross-session message, so the question goes there with
+# instructions to relay it.
+relay_via = "chief"
+ack_relay = "{label} не в окне терминала, спрошу его через {relay}."
+
+# When it is not running at all: ask this room instead rather than saying no.
+fallback = "chief"
+ack_fallback = "{label} не нашёл, спросил {fallback}."
+ack_missing = "Ни {label}, ни {fallback} не нашёл."
+
+# Checked by `jarvis_daemon.py --selfcheck`. `route` is the id this phrase must
+# reach, empty meaning Jarvis answers it himself. Add the questions that must
+# NOT come here - those are the ones a mention word gets wrong.
+[[room.example]]
+phrase = "посмотри в слаке, что написал Петров"
+route = "chat"
+[[room.example]]
+phrase = "что там в слаке"
+route = "chat"
+[[room.example]]
+phrase = "что написал Петров"
+route = ""
+[[room.example]]
+phrase = "дай сводку по чату"
+route = ""
+[[room.example]]
+phrase = "что по непрочитанным сообщениям"
+route = ""

@@ -11,6 +11,13 @@ __pycache__/
 # Personal settings
 jarvis.env
 
+# Your own rooms and actions. The folders are tracked, what you put in them is
+# not - so `git pull` never argues with your config.
+rooms.d/*.toml
+actions.d/*.toml
+!rooms.d/*.example.toml
+!actions.d/*.example.toml
+
 # Voice print and enrolment recordings - biometrics, never publish
 voiceprint.json*
 cohort/
@@ -53,3 +60,6 @@ session/*
 .DS_Store
 *.bak
 *.bak-*
+
+# pytest
+.pytest_cache/

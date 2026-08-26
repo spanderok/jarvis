@@ -24,8 +24,9 @@ HOME = os.path.expanduser("~")
 SESSIONS = os.path.join(HOME, ".claude", "sessions")
 PROJECTS = os.path.join(HOME, ".claude", "projects")
 # folders whose session speaks for a known role - the owner calls them by these names
-# The rocket agent is named "рокет" by rocket.sh, so its own session name is
-# already the spoken word - only the orchestrator needs mapping from its folder.
+# A room started by room.sh carries its own name, so its session name is
+# already the spoken word - only a window raised by hand in a known folder
+# needs mapping.
 ROLES = {
     "claude-orchestrator": "шеф",
 }
