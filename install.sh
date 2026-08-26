@@ -18,6 +18,10 @@ STEP="${1:-all}"
 LANG_FILE=""
 lang_field() { python3 "$REPO/lang.py" get "$1" 2>/dev/null; }
 
+# CAM++ speaker embeddings, exported to ONNX. Language-independent - it compares
+# voices, not words - so it lives here rather than in a locale.
+SPEAKER_URL="${JARVIS_SPEAKER_URL:-https://huggingface.co/FunAudioLLM/CosyVoice-300M/resolve/main/campplus.onnx}"
+
 say() { printf '\n== %s\n' "$1"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
@@ -176,14 +180,24 @@ if [ "$STEP" = all ] || [ "$STEP" = models ]; then
   fi
   fi
 
-  # 3. Speaker verification is optional. Without campplus.onnx voiceprint.py
-  #    fails open - Jarvis answers whoever speaks, which is the default anyway.
+  # 3. Speaker verification, so he can tell your voice from anyone else's.
+  #    Optional: without campplus.onnx voiceprint.py fails open, and he answers
+  #    whoever speaks - which is the default anyway until a profile is recorded.
+  #    JARVIS_NO_SPEAKER=1 skips the download.
   if [ -f "$MODELS/campplus.onnx" ]; then
     echo "speaker check: model present"
+  elif [ -n "${JARVIS_NO_SPEAKER:-}" ]; then
+    echo "speaker check: skipped, the voice lock stays off"
   else
-    echo "speaker check: no campplus.onnx - the voice lock stays off."
-    echo "  To enable it, put a CAM++ speaker-embedding model exported to ONNX at"
-    echo "  $MODELS/campplus.onnx, then run: uv run enroll_voice.py"
+    echo "speaker check: downloading CAM++ (28 MB)"
+    curl -fL# -o "$MODELS/campplus.onnx.tmp" "$SPEAKER_URL" \
+      && mv "$MODELS/campplus.onnx.tmp" "$MODELS/campplus.onnx" \
+      || { rm -f "$MODELS/campplus.onnx.tmp"
+           echo "warning: CAM++ download failed - the voice lock stays off." >&2; }
+  fi
+  if [ -f "$MODELS/campplus.onnx" ] && [ ! -f "$REPO/voiceprint.json" ]; then
+    echo "  no voice profile yet - record one with: uv run enroll_voice.py"
+    echo "  (until then he answers anyone, which is the default)"
   fi
 fi
 
