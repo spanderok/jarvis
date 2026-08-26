@@ -14,7 +14,7 @@ listens for is a config file, so a third language is one more file - see
 ## One exchange, end to end
 
 1. The wake engine listens to the microphone at 16 kHz. By default that is Vosk,
-   a 40 MB offline recognizer that triggers on the real word "Jarvis" - free, no
+   a 39 MB offline recognizer that triggers on the real word "Jarvis" - free, no
    registration, no network.
 2. A chime, then he records until you stop talking - or until you press the key,
    which ends the recording immediately.
@@ -33,7 +33,28 @@ listens for is a config file, so a third language is one more file - see
   dependencies in its header, so there is no requirements file and no virtualenv
   to manage.
 - The [`claude` CLI](https://claude.com/claude-code), logged in.
-- About 700 MB of disk for the models.
+- About 800 MB of disk for the models.
+
+### The models
+
+Nothing is bundled - `install.sh` fetches each one from its own home, and
+`models/` is in `.gitignore`. All of them are free and need no account.
+
+| Model | For | Size | From |
+|---|---|---|---|
+| `vosk-model-small-en-us-0.15` | hearing the wake word | 39 MB | [alphacephei.com](https://alphacephei.com/vosk/models) |
+| `parakeet-tdt-0.6b-v3` | transcribing the question | 600 MB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3), pulled on first use |
+| `en_GB-alan-medium` | his voice | 60 MB | [piper-voices](https://huggingface.co/rhasspy/piper-voices) |
+| `campplus.onnx` | telling your voice from a stranger's | 28 MB | [CAM++ ONNX](https://huggingface.co/FunAudioLLM/CosyVoice-300M) |
+
+Which ones depends on the language: `JARVIS_LANG=ru` swaps the first three for
+the Russian recognizer and the vosk-tts voice (129 MB), and the transcriber is
+shared. The URLs live in `locales/<lang>.toml`, so pointing at a different
+model is a config edit rather than a patch.
+
+The speaker model is the only optional one. Skip it with `JARVIS_NO_SPEAKER=1`
+and the voice lock stays off, which is the default anyway until you record a
+profile.
 
 ## Install
 
