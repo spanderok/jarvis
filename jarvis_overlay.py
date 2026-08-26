@@ -158,10 +158,10 @@ SPEAK_LEVEL_FILE = JARVIS_DIR / "speak_level"
 
 STATES = {
     # state: (label, hue rgb, glow 0..1, ring_a s, ring_b s, pip s, viz width)
-    "idle":      ("спит",    (0.49, 0.56, 0.68), 0.12, 26.0, 19.0, 4.2, 0),
-    "listening": ("слушаю",  (0.32, 0.86, 1.00), 1.00, 7.0,  6.0,  4.2, WAVE_W),
-    "thinking":  ("думаю",   (1.00, 0.71, 0.30), 0.82, 2.4,  1.7,  1.4, SWARM_W),
-    "speaking":  ("говорю",  (0.62, 0.91, 1.00), 0.90, 5.0,  6.0,  4.2, WAVE_W),
+    "idle":      ("asleep",  (0.49, 0.56, 0.68), 0.12, 26.0, 19.0, 4.2, 0),
+    "listening": ("listening", (0.32, 0.86, 1.00), 1.00, 7.0,  6.0,  4.2, WAVE_W),
+    "thinking":  ("thinking", (1.00, 0.71, 0.30), 0.82, 2.4,  1.7,  1.4, SWARM_W),
+    "speaking":  ("talking", (0.62, 0.91, 1.00), 0.90, 5.0,  6.0,  4.2, WAVE_W),
 }
 
 
@@ -239,7 +239,7 @@ class Capsule(NSObject):
         self.panel.setOpaque_(False)
         self.panel.setBackgroundColor_(NSColor.clearColor())
         self.panel.setHasShadow_(False)          # the glow layer is the shadow
-        self.panel.setIgnoresMouseEvents_(True)   # включается, когда курсор на капсуле
+        self.panel.setIgnoresMouseEvents_(True)   # turned off when the cursor is on the capsule
         self.panel.setMovableByWindowBackground_(DRAGGABLE)
         self.panel.setCollectionBehavior_(
             NSWindowCollectionBehaviorCanJoinAllSpaces
@@ -263,14 +263,14 @@ class Capsule(NSObject):
         self.wave_buf = [0.0] * WAVE_SAMPLES
         self.wave_prev = 0.0
         self.wave_level = 0.0
-        self.wave_seq = -1       # какой номер строки уровня мы уже прочли
-        self.wave_queue = []     # ещё не показанные отсчёты
-        self.speak_env = []      # огибающая произносимой фразы
+        self.wave_seq = -1       # which level line we have already read
+        self.wave_queue = []     # samples not shown yet
+        self.speak_env = []      # the envelope of the phrase being spoken
         self.speak_start = 0.0
         self.speak_rate = 32.0
         self.speak_mtime = None
-        self.catching = False    # ловим ли сейчас мышь
-        self.cap_w = COLLAPSED_W  # текущая ширина капсулы, для попадания курсора
+        self.catching = False    # are we catching the mouse right now
+        self.cap_w = COLLAPSED_W  # the capsule's current width, for cursor hit tests
         self.spot = None
         self.right_anchored = CORNER.endswith("r")
         if DRAGGABLE:
@@ -556,7 +556,7 @@ class Capsule(NSObject):
         was = self.state
         self.state, self.owner = state, owner
         visible = state in STATES and (SHOW_IDLE or state != "idle")
-        print(f"capsule: {state} -> {'показываю' if visible else 'скрываю'}", flush=True)
+        print(f"capsule: {state} -> {'showing' if visible else 'hiding'}", flush=True)
         if not visible:
             self.stop_bars()
             if self.shown:

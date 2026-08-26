@@ -18,6 +18,17 @@ import re
 import sys
 import time
 
+# Which characters make a word depends on the language, so the pattern comes
+# from the locale. Falling back to any letter keeps the counts roughly right
+# when the locale will not load, instead of counting nothing at all.
+try:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import lang
+
+    WORD = lang.current().word_re
+except Exception:
+    WORD = re.compile(r"[^\W\d_]+", re.UNICODE)
+
 LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "spoken.log")
 # about 20 000 phrases at 150 characters each; trimmed to half when it grows past
 MAX_BYTES = 3_000_000
@@ -95,7 +106,7 @@ def unknown_words(days: float | None = None) -> list[tuple[int, str]]:
     cur = sqlite3.connect(db).cursor()
     counts: Counter = Counter()
     for _, _, _, spoken in read(days):
-        counts.update(re.findall(r"[а-яёА-ЯЁ]+", spoken.lower()))
+        counts.update(WORD.findall(spoken.lower()))
     missing = []
     for word, n in counts.items():
         if cur.execute("SELECT 1 FROM o WHERE w=?", (word,)).fetchone():
@@ -114,11 +125,11 @@ if __name__ == "__main__":
             print(f"{ts}  {src:6s}  {raw}")
     elif cmd == "words":
         rows = read(arg)
-        total = len({w for _, _, _, s in rows for w in re.findall(r"[а-яёА-ЯЁ]+", s.lower())})
+        total = len({w for _, _, _, s in rows for w in WORD.findall(s.lower())})
         missing = unknown_words(arg)
-        span = f"за последние {arg:g} дн." if arg else "за всё время"
-        print(f"фраз {span}: {len(rows)}, разных слов {total}, "
-              f"нет в словаре {len(missing)}")
+        span = f"over the last {arg:g} days" if arg else "over all time"
+        print(f"phrases {span}: {len(rows)}, distinct words {total}, "
+              f"not in the dictionary {len(missing)}")
         for n, w in missing:
             print(f"  {n}x  {w}")
     else:

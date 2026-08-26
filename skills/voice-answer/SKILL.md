@@ -1,110 +1,110 @@
 ---
 name: voice-answer
-description: Озвучить короткий ответ голосом Джарвиса (локальная модель vosk 0.7, диктор 4) на этом Mac и/или отправить его голосовым сообщением в Telegram. Вызывается когда хозяин просит ответить голосом, сказать вслух, озвучить результат, проговорить итог, прислать голосовое или скинуть голосовым в телеграм - в том числе когда просьба звучит как «сделай X и ответь голосом».
+description: Speak a short answer aloud in Jarvis' own voice on this Mac, and/or send it as a Telegram voice message. Use it when the owner asks for a spoken answer, asks you to say something out loud, to read the result back, or to send a voice message - including when the request is phrased as "do X and answer out loud".
 ---
 
 # voice-answer
 
-Любой агент может доложить результат голосом - тем же голосом, которым говорит Джарвис. Работает на локальной модели vosk 0.7 (диктор 4), без сети, без MCP и без обращения к демону.
+Any agent can report a result out loud, in the same voice Jarvis speaks with. It runs on a local model - piper for English, vosk for Russian - with no network, no MCP and no call to the daemon.
 
-## Как позвать
+## How to call it
 
 ```bash
-bash ~/.claude/skills/voice-answer/speak.sh "тесты зелёные, поправил один снапшот"
-bash ~/.claude/skills/voice-answer/speak.sh --telegram "деплой на демо прошёл"
-bash ~/.claude/skills/voice-answer/speak.sh --both "ревью готово, три замечания"
+bash ~/.claude/skills/voice-answer/speak.sh "tests are green, fixed one snapshot"
+bash ~/.claude/skills/voice-answer/speak.sh --telegram "the demo deploy went through"
+bash ~/.claude/skills/voice-answer/speak.sh --both "review is done, three notes"
 ```
 
-- без флага - вслух на этом Mac;
-- `--telegram` - голосовое сообщение в личку боту, вслух не говорит;
-- `--both` - и то, и другое;
-- `--file /tmp/x.ogg` - только собрать файл, ничего не отправлять;
-- `--stop` - немедленно заткнуть текущую озвучку.
+- no flag - out loud on this Mac
+- `--telegram` - a voice message to the bot's direct chat, says nothing aloud
+- `--both` - both at once
+- `--file /tmp/x.ogg` - build the file only, send nothing
+- `--stop` - shut the current speech up immediately
 
-**«Замолчи» выполняет любой агент, а не только говорящий.** хозяин часто печатает в окне другой сессии, и клавиши уходят туда. Поэтому на просьбу «замолчи», «хватит», «стоп» - сразу:
+**"Be quiet" is carried out by any agent, not only the one talking.** The owner often types in another session's window, and the keys go there. So on "be quiet", "enough", "stop", run this at once:
 
 ```bash
 bash ~/.claude/skills/voice-answer/speak.sh --stop
 ```
 
-Оно убивает проигрыватель и снимает замок, даже если говорит другая сессия.
+It kills the player and releases the lock, even when a different session is the one talking.
 
-Если симлинк `~/.claude/skills` не заведён, путь берётся из репозитория: `~/.claude/jarvis/skills/voice-answer/speak.sh`.
+If the `~/.claude/skills` symlink is not set up, take the path from the repository instead: `~/.claude/jarvis/skills/voice-answer/speak.sh`.
 
-## Что озвучивать
+## What is worth speaking
 
-Текст для уха, а не для экрана - иначе слушать невозможно:
+Text for an ear, not for a screen - otherwise it cannot be listened to:
 
-- три-четыре предложения, живой речью;
-- без markdown, списков, путей, ссылок и идентификаторов сессий;
-- числа и номера тикетов словами: «эр-о-си четырнадцать семь ноль три» вместо `ROC-14703`;
-- имена людей по фамилии, не логином.
+- three or four sentences of ordinary speech
+- no markdown, no lists, no paths, no links, no session identifiers
+- numbers and ticket ids as words: "ticket fourteen seven oh three", not `ABC-14703`
+- people by surname, not by login
 
-**Ответ в сессии всё равно пишется текстом полностью.** Голос - это дополнение к отчёту, а не замена: хозяин читает подробности глазами, а голосом слышит итог.
+**The full answer is still written out in the session as text.** The voice is an addition to the report, never a replacement: the owner reads the detail with their eyes and hears the conclusion.
 
-## Доклад голосом - односторонний
+## A spoken report is one-way
 
-Если микрофон не у этой сессии, хозяин не может ответить голосом - он вообще может не смотреть в это окно. Поэтому голосовой доклад заканчивается утверждением, а не приглашением к разговору:
+If the microphone is not held by this session, the owner cannot answer out loud - they may not even be looking at this window. So a spoken report ends in a statement, not an invitation to talk:
 
-- не задавать вопросов голосом и не говорить «жду ответа», «скажи, что дальше», «подтверди»;
-- не ждать реакции: доложил и закончил ход;
-- если для продолжения действительно нужно решение хозяина - сказать голосом, что работа встала и почему, а сам вопрос оставить текстом в сессии, чтобы он прочитал, когда дойдёт.
+- ask no questions out loud, and never say "waiting for your answer", "tell me what next", "please confirm"
+- do not wait for a reaction: report and end the turn
+- if a decision really is needed to carry on, say out loud that the work has stopped and why, and leave the question itself as text in the session, to be read when they get to it
 
-Проверить, у кого микрофон, если это важно для формулировки:
+Checking who holds the microphone, when it matters to the wording:
 
 ```bash
 bash ~/.claude/jarvis/take-mic.sh --dry-run
 ```
 
-Ответ вида «микрофон держит сессия «X»» с чужим именем значит: говори утверждениями. Если микрофон у этой сессии, диалог голосом уместен - Хозяин скажет следующую фразу, и она придёт событием.
+An answer naming a session that is not this one means: speak in statements. If this session holds it, a spoken conversation makes sense - the owner will say the next phrase and it will arrive as an event.
 
-Токены, пароли и содержимое ключей не озвучивать и не отправлять - голосовое сообщение уходит в облако Telegram.
+Never speak or send tokens, passwords or the contents of keys - a voice message goes through Telegram's servers.
 
-## Когда звать без напоминания
+## When to use it without being reminded
 
-- Хозяин прямо попросил ответить голосом или прислать голосовое.
-- Он попросил в начале длинной задачи «скажи, когда закончишь» - тогда голос в конце уместен.
+- The owner asked for a spoken answer, or for a voice message.
+- They asked at the start of a long task to be told when it is finished - then a spoken line at the end is right.
 
-Если он просто дал задачу - молчать, лишний звук раздражает.
+If they simply handed over a task, stay quiet. Sound nobody asked for is an irritation.
 
-## Как это устроено
+## How it works
 
-Одна фраза целиком, от просьбы до звука:
+One phrase end to end, from the request to the sound:
 
-1. Агент вызывает `speak.sh` с текстом.
-2. Скрипт считает sha1 от текста, голоса и скорости, и смотрит в кеш `~/.claude/tts-cache`. Повтор той же фразы звучит мгновенно и ничего не стоит.
-3. Нет в кеше - `vosk_say.py` синтезирует wav локально: 0.86 секунды на новую фразу, 0.01 секунды на повтор.
-4. Для Telegram wav переводится в ogg с кодеком opus - именно в таком виде сообщение выглядит голосовым, с дорожкой и кнопкой ускорения, а не файлом-вложением.
-5. Отправка - `sendVoice`, токен и chat id берутся из Keychain (`rocketwatch-telegram-token`, `rocketwatch-telegram-chat`), в лог не попадают.
-6. Локальное проигрывание - `afplay` под замком-каталогом `~/.claude/tts-cache/.speak.lock`, чтобы два агента, закончившие одновременно, не говорили друг поверх друга.
+1. The agent calls `speak.sh` with the text.
+2. The script takes a sha1 of the text, the voice and the rate, and looks in `~/.claude/tts-cache`. Repeating the same phrase plays instantly and costs nothing.
+3. Not in the cache: the local model synthesises a wav - about 0.3 s for a new phrase with piper, 0.9 s with vosk, 0.01 s for a repeat either way.
+4. For Telegram the wav is converted to ogg with the opus codec - in that form the message shows up as a real voice message, with a waveform and a speed button, rather than as a file attachment.
+5. Sending is `sendVoice`; the token and chat id come from the Keychain (`jarvis-telegram-token`, `jarvis-telegram-chat`) and never reach the log.
+6. Local playback is `afplay` under a directory lock at `~/.claude/tts-cache/.speak.lock`, so two agents finishing at the same moment do not talk over each other.
 
-Сеть не нужна ни для голоса, ни для голосового сообщения. Если локальной модели нет на месте, скрипт сам идёт в сеть за прежним голосом Microsoft (`VOICE_ENGINE=edge` включает его принудительно), а без сети падает на системный голос Yuri.
+No network is needed for either the voice or the voice message. If the local model is not in place, the script goes to the network for a Microsoft neural voice (`VOICE_ENGINE=edge` forces that), and with no network at all it falls back to the system voice.
 
-Ударение слова правится один раз и навсегда: `~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py деплОй`. Для твёрдой согласной пишется произношение через `э`: `тендер=тЭндер`.
+Fixing how a word is pronounced is a one-time thing. For the Russian voice: `~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py тЕстовый` - the capital letter marks the stressed vowel.
 
-## Ответ придёт не тебе
+## The answer will not come back to you
 
-Микрофон держит одна сессия, и ответ хозяина попадёт именно в неё, кто бы ни говорил. Поэтому скил при каждой озвучке пишет в `~/.claude/jarvis/last_speaker` имя своей сессии и время.
+One session holds the microphone, and the owner's answer lands there whoever was talking. So this skill writes its own session name and the time into `~/.claude/jarvis/last_speaker` on every phrase it speaks.
 
-Сессия с микрофоном читает этот файл и пересылает ответ по имени, если фраза адресована не ей. От тебя ничего не требуется - просто помни, что твой вопрос голосом вернётся окольным путём и не мгновенно.
+The session with the microphone reads that file and forwards the answer by name when the phrase was not addressed to it. Nothing is required of you - just remember that a question you asked out loud comes back by a roundabout route, and not instantly.
 
-## Созвон: вместо динамиков - телеграм
+## In a call: Telegram instead of the speakers
 
-Если открыт Google Meet или запущен Zoom, а звук идёт во встроенные динамики, вслух скил не говорит - фраза уходит голосовым сообщением в Telegram. Проверка живёт в `~/.claude/jarvis/call_guard.sh` и занимает треть секунды.
+If a video call is open and the sound is going to the built-in speakers, the skill does not speak aloud - the phrase goes to Telegram as a voice message instead. The check lives in `~/.claude/jarvis/call_guard.sh` and takes a third of a second.
 
-Так сделано потому, что мьют в Meet снаружи не читается, а вред от голоса возникает только когда его слышит комната: в наушниках тот же созвон безопасен, и скил говорит как обычно.
+It works that way because a mute button cannot be read from outside, and the harm from a voice only exists when the room hears it: on headphones the same call is safe, and the skill speaks as usual.
 
-Выключить проверку: `JARVIS_CALL_GUARD=off`.
+Turn the check off with `JARVIS_CALL_GUARD=off`.
 
-## Голос без спроса - нельзя
+## Never speak unasked
 
-Озвучивать можно только то, о чём хозяин спросил: вопрос пришёл голосом, или он прямо попросил сказать вслух, или это доклад о задаче, которую он сам поручил.
+Speak only about what the owner asked for: the question arrived by voice, or they explicitly asked for it out loud, or it is a report on a task they handed over themselves.
 
-Фоновые события голосом не объявлять. Новое сообщение в чате, упавший пайплайн, смена статуса тикета - всё это молча, текстом в сессию. Он сидит в наушниках и работает: неожиданный голос сбивает сильнее, чем помогает.
+Background events are never announced out loud. A new message, a failed pipeline, a ticket changing status - all of that goes quietly, as text in the session. They are sitting in headphones working, and an unexpected voice throws them off more than it helps.
 
-Исключение одно - он сказал что-то вроде «сообщай голосом обо всех новых сообщениях». Тогда озвучиваем ровно то, что он назвал, и до конца сессии.
+The one exception is being told something like "tell me out loud about every new message". Then speak exactly what was named, for the rest of the session.
 
-## Границы
+## Limits
 
-- Замок держит только агентов. Демон Джарвиса говорит своей очередью (`vosk_worker.py`) и про этот замок не знает, так что наложиться на его речь всё ещё можно - если он в этот момент отвечает голосом, лучше подождать.
-- Ярлык `~/.claude/skills` - симлинк в vault, поэтому скрипт синхронизируется на вторую машину. Бит `+x` через синк не доезжает, поэтому вызывать только через `bash <путь>`, а не напрямую.
+- The lock only holds agents. The Jarvis daemon speaks on its own queue and knows nothing about this lock, so it is still possible to talk over it - if it is answering out loud at that moment, waiting is better.
+- The `+x` bit does not always survive being synced or copied between machines, so call the script through `bash <path>` rather than directly.

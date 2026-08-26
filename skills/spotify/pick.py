@@ -1,8 +1,9 @@
-"""Из ответа поиска Spotify - строки «uri<TAB>название - исполнитель».
+"""A Spotify search response turned into "uri<TAB>title - artist" lines.
 
-Отдельным файлом, а не heredoc внутри spotify.sh: там `python3 - <<PY` забирает
-stdin под сам код, и до json.load доходит уже прочитанный скрипт, а не данные.
-Поймано 22.08 - поиск падал с трейсбеком, хотя запрос к API отвечал правильно.
+A separate file rather than a heredoc inside spotify.sh: there `python3 - <<PY`
+takes stdin for the code itself, so json.load gets the already-read script
+instead of the data. Caught on 22.08 - search died with a traceback while the
+API request was answering perfectly well.
 """
 import json
 import sys

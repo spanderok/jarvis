@@ -1,129 +1,130 @@
-Подключить микрофон к ЭТОЙ сессии: ты продолжаешь работать как обычно, но слышишь, когда хозяин зовёт «Джарвис», и отвечаешь ему голосом.
+Attach the microphone to THIS session: you go on working as usual, but you also hear the owner when they call your name, and you answer out loud.
 
-Аргумент в `$ARGUMENTS`: пусто - включить, `stop` - отпустить микрофон, `status` - сказать, кто его держит, `kill` - немедленно заткнуть озвучку.
+Argument in `$ARGUMENTS`: empty - turn it on, `stop` - release the microphone, `status` - say who is holding it, `kill` - shut the voice up immediately.
 
-## Если `$ARGUMENTS` = kill
+## If `$ARGUMENTS` = kill
 
-Одна команда, ничего больше:
+One command, nothing else:
 
 ```bash
 bash ~/.claude/skills/voice-answer/speak.sh --stop
 ```
 
-Работает из любой сессии и глушит голос, даже если говорит другая. Ответить одной строкой, голосом ничего не произносить.
+Works from any session and silences the voice even when another one is talking. Answer in one line, and say nothing out loud.
 
-## Если `$ARGUMENTS` = status
+## If `$ARGUMENTS` = status
 
-Выполнить и пересказать одной-двумя строками, ничего не поднимая и не останавливая:
+Run this and retell it in a line or two. Start nothing, stop nothing:
 
 ```bash
 python3 ~/.claude/jarvis/agents_status.py | head -1
 ```
 
-Первая строка ответа как раз про микрофон: свободен он или его держит конкретная сессия. Годится в любой сессии, даже если слушатель включён в другой.
+The first line of the output is about the microphone: free, or held by a named session. Works from any session, even when the listener is running in a different one.
 
-То же самое, что `stop`, делает отдельная команда `/assist-off` - она короче для набора и для голоса.
+The same thing as `stop` has its own command, `/assist-off` - shorter to type and shorter to say.
 
-## Если `$ARGUMENTS` = stop
+## If `$ARGUMENTS` = stop
 
-1. Останови слушателя через `TaskStop` (id задачи Monitor, которую ты поднимал в этой сессии).
-2. Скажи одной строкой, что микрофон отпущен, и напомни: полноценный Джарвис поднимается обратно командой `bash ~/.claude/jarvis/jarvisd.sh` или ярлыком Siri «Запусти Джарвиса».
-3. Больше ничего не делай.
+1. Stop the listener with `TaskStop` (the id of the Monitor task you started in this session).
+2. Say in one line that the microphone is released, and remind them that the full daemon comes back with `bash ~/.claude/jarvis/jarvisd.sh` or the `/jarvis-daemon` command.
+3. Do nothing else.
 
-## Если аргумента нет - включаем
+## With no argument - turn it on
 
-**`/assist` без аргумента - это всегда перезапуск.** Даже если микрофон уже у этой сессии и слушатель жив, всё равно проходи шаги с первого: гаси старого слушателя и поднимай нового. Отвечать «уже включено» и ничего не делать - нельзя: хозяин набирает команду повторно именно тогда, когда правки в `jarvis_daemon.py` нужно подхватить, а числа и клавиши читаются один раз при старте.
+**`/assist` with no argument is always a restart.** Even when the microphone is already here and the listener is alive, still go through every step from the first: kill the old listener and start a new one. Answering "already on" and doing nothing is wrong - the owner types the command again precisely when a change in `jarvis_daemon.py` needs picking up, and every number and key is read once, at start.
 
-**Шаг 1. Забрать микрофон.** Он один, поэтому включение здесь означает выключение везде - и у отдельного Джарвиса, и у слушателя другой сессии, и у своего собственного. Разрешения не спрашивать: хозяин сам набрал команду именно здесь:
+**Step 1. Take the microphone.** There is only one, so turning it on here turns it off everywhere else - the standalone daemon, another session's listener, and your own. Do not ask for permission: the owner typed the command in this window on purpose.
 
 ```bash
 bash ~/.claude/jarvis/take-mic.sh
 ```
 
-Скрипт отвечает одной строкой - у кого забрал: «микрофон забран у сессии «доктор»», «остановлен Джарвис-демон» или «микрофон был свободен». Эту строку передать хозяину, чтобы он знал, где Джарвис только что погас.
+The script answers in one line saying who it took it from: a named session, the daemon, or nobody. Pass that line on, so the owner knows where Jarvis just went quiet.
 
-**Шаг 2. Погасить свой прежний монитор.** Если в этой сессии уже был поднят `Monitor` со слушателем, останови его через `TaskStop` - иначе останется мёртвая задача, которая ничего не слышит.
+**Step 2. Kill your own previous monitor.** If a `Monitor` with the listener was already started in this session, stop it with `TaskStop` - otherwise a dead task is left behind that hears nothing.
 
-**Шаг 3. Поднять слушателя** инструментом `Monitor`, обязательно `persistent: true`:
+**Step 3. Start the listener** with the `Monitor` tool, `persistent: true` is required:
 
 ```
 Monitor({
   command: "bash ~/.claude/jarvis/listen.sh",
-  description: "голос: слышу «Джарвис» в этой сессии",
+  description: "voice: listening for the wake word in this session",
   persistent: true,
 })
 ```
 
-**Шаг 4. Поднять плашку**, если её нет - это она показывает «слушаю», «думаю», «говорю»:
+**Step 4. Raise the badge** if it is not up - it is what shows listening / thinking / talking:
 
 ```bash
 pgrep -f jarvis_overlay.py >/dev/null || nohup bash ~/.claude/jarvis/overlay.sh >/dev/null 2>&1 &
 ```
 
-Значок у часов (`status.sh`, меню-бар) с 21.08 не поднимаем: его меню целиком
-дублируется клавишей M5, командой `/assist-off` и ярлыком Siri. Файлы на месте,
-вернуть можно вручную через `bash ~/.claude/jarvis/status.sh`.
+The menu bar icon (`status.sh`) is not started any more: its menu is covered by the key, by `/assist-off` and by `/jarvis-daemon`. The files are still there, and `bash ~/.claude/jarvis/status.sh` brings it back by hand.
 
-**Шаг 5. Отчитаться двумя строками** - что микрофон твой и что звать надо со слова «Джарвис». Голосом на этом шаге не говори.
+**Step 5. Report in two lines** - that the microphone is yours, and that they should start with the wake word. Do not speak on this step.
 
-## Что делать с событиями слушателя
+## What to do with the listener's events
 
-Каждая строка из монитора - это событие, а не сообщение от хозяина в чате.
+Every line from the monitor is an event, not a chat message from the owner.
 
-| Строка | Что значит | Что делать |
+| Line | What it means | What to do |
 |---|---|---|
-| `LISTENING: …` | слушатель встал | ничего, это подтверждение |
-| `HEARD: <текст>` | хозяин сказал это голосом | выполнить как обычную просьбу |
-| `BUSY: … pid N` | кто-то занял микрофон между шагами | подождать пару секунд, ещё раз `take-mic.sh` и поднять монитор заново |
+| `LISTENING: …` | the listener is up | nothing, it is a confirmation |
+| `HEARD: <text>` | the owner said this out loud | treat it as an ordinary request |
+| `BUSY: … pid N` | somebody took the microphone between steps | wait a couple of seconds, run `take-mic.sh` again and restart the monitor |
 
-Работа по `HEARD` идёт обычным порядком, со всеми твоими инструментами и правилами проекта. Отличий четыре:
+Work on a `HEARD` goes the usual way, with all your tools and the project's rules. Four things differ.
 
-0. **Первым делом повтори услышанное в чат** - до всякой работы, цитатой:
+0. **Repeat what you heard in the chat first** - before any work, as a quote:
 
 ```
-Ты сказал:
-> <распознанная фраза целиком>
+You said:
+> <the whole transcribed phrase>
 ```
 
-Событие монитора хозяин в чате не читает, для него всё выглядит так, будто агент молча ушёл думать. Повтор фразы решает сразу две вещи: он видит, что вопрос дошёл, и видит, каким его услышало распознавание - а оно врёт, и по цитате он сразу поймёт, почему ответ не про то.
+The owner does not read the monitor's events, so without this it looks as if the agent walked off to think in silence. The quote does two things at once: they see the question arrived, and they see what the transcription made of it - it does get things wrong, and the quote explains at a glance why an answer is about the wrong thing.
 
-1. **Текст распознан автоматически, огрехи бывают** - догадывайся по смыслу, по мелочам не переспрашивай. «Мерш реквест» это merge request, «эр о си» это ROC.
-2. **Закончил - скажи об этом плашке.** Ответил текстом без голоса - выполни `bash ~/.claude/jarvis/answered.sh`. Иначе значок «думаю» висит до пятиминутного таймаута: снять его умеет только начало озвучки, а её тут не было. Если ответ был голосом, ничего делать не надо - замок озвучки снимает «думаю» сам.
+1. **The text was transcribed automatically, so it has mistakes in it** - work out what was meant, and do not ask again over small things.
 
-3. **Голосом отвечай только на сказанное голосом, и только на спрошенное.** Фоновые события - новое сообщение в чате, упавший пайплайн, смена статуса - голосом не объявлять никогда, пока он прямо не попросил «сообщай голосом о таком». Один раз ответил на вопрос про рокет - это не подписка на озвучку всех новых сообщений. Вопрос пришёл событием `HEARD` - отвечай и голосом, и текстом. Хозяин написал его руками в чат - отвечай только текстом, вслух не читай: он смотрит в экран, и озвучка там лишний шум. Исключение одно - он сам попросил сказать вслух.
+2. **When you are done, tell the badge.** If you answered in text with no voice, run `bash ~/.claude/jarvis/answered.sh`. Otherwise "thinking" hangs there until the timeout: only the start of speech clears it, and there was none. If the answer was spoken, nothing to do - the speech lock clears it by itself.
 
-   **Сначала голос, потом текст.** Как только ответ ясен - первым действием произнеси короткий итог, и только после этого пиши подробности в чат. Хозяин слушает, а не читает: если сначала выложить длинный разбор, он молча ждёт озвучки всё время, пока ты печатаешь. Текстом потом пиши как всегда, подробно.
+3. **Speak only in reply to something spoken, and only to what was asked.** Background events - a new message, a failed pipeline, a status change - are never announced out loud until they explicitly ask for that. Answering one question about the chat is not a subscription to every new message in it. A question that arrived as a `HEARD` event gets both voice and text. A question typed into the chat by hand gets text only, never read aloud: they are looking at the screen, and speech there is noise. The one exception is being asked to say it out loud.
 
-   Голос - скил `voice-answer`:
+   **Voice first, then the text.** The moment the answer is clear, say the short version out loud, and only then write the details into the chat. The owner is listening, not reading: put the long write-up first and they sit in silence waiting for the voice the whole time you are typing. Write the text afterwards as thoroughly as always.
+
+   The voice is the `voice-answer` skill:
 
 ```bash
-bash ~/.claude/skills/voice-answer/speak.sh "готово, тесты зелёные, поправил один снапшот"
+bash ~/.claude/skills/voice-answer/speak.sh "done, tests are green, fixed one snapshot"
 ```
 
-Правила для голоса лежат в самом скиле: три-четыре предложения, без разметки и путей, числа словами.
+The rules for the voice live inside that skill: three or four sentences, no markup, no paths, numbers as words.
 
-4. **Фраза может быть адресована не тебе - перешли её.** Микрофон один, а докладывать голосом может любой агент, поэтому ответ хозяина всегда приходит сюда, даже если спрашивал не ты.
+4. **A phrase may not be addressed to you - forward it.** There is one microphone but any agent can report through it, so the owner's answer always arrives here, even when somebody else asked.
 
-   Перед работой над фразой посмотри `~/.claude/jarvis/last_speaker`: первая строка - имя сессии, которая говорила последней, вторая - время в секундах. Если там **чужое** имя, говорили меньше десяти минут назад, а фраза звучит как ответ на чужой доклад, а не как задача тебе - перешли её через `SendMessage` в ту сессию по имени и скажи хозяину одной строкой, куда ушло. Своё имя в файле или старая метка - работай сам.
+   Before working on a phrase, look at `~/.claude/jarvis/last_speaker`: the first line is the session that spoke last, the second is how many seconds ago. If the name is **not** yours, it was under ten minutes ago, and the phrase sounds like an answer to somebody else's report rather than a task for you - forward it with `SendMessage` to that session by name and tell the owner in one line where it went. Your own name in the file, or a stale timestamp: it is yours, work on it.
 
-5. **Новая фраза, пока ты ещё работаешь - в очередь, ответы по порядку.** Слушатель слышит «Джарвис» и во время «думаю», поэтому вторая фраза приходит отдельным событием. Порядок железный: отбить её в чат цитатой, доделать первый ответ и озвучить его, и только потом взяться за вторую. Голосом про очередь не объявлять - цитата в чате уже показывает, что фраза принята.
+5. **A new phrase while you are still working goes in a queue, and answers come in order.** The listener hears the wake word during "thinking" too, so a second phrase arrives as its own event. The order is fixed: quote it into the chat, finish the first answer and speak it, and only then start the second. Do not announce the queue out loud - the quote in the chat already shows the phrase was taken.
 
-   Клавиша - другое дело: она значит «замолчи и слушай меня», а не «встань в очередь». По ней текущая озвучка обрывается, недосказанный ответ дальше не читается, и ты слушаешь новую фразу.
-6. **Долгая задача - два голоса.** Сразу скажи одной фразой, что взялся, и второй раз - когда закончил. Молчать десять минут нельзя, хозяин не видит экран.
+   The key is a different matter: it means "be quiet and listen to me", not "join the queue". It cuts the current speech off, the rest of the unfinished answer is not read, and you listen to the new phrase.
 
-   Ответ озвучивается всегда, сколько бы работа ни заняла. Через пять минут слушатель сам гасит «думаю» на плашке - это только индикатор, а не отмена вопроса. Дошёл до ответа через пятнадцать минут - всё равно проговори его вслух, иначе для хозяина он просто пропал.
-7. **Голосом не спрашивай, если микрофон не твой.** Пока `/assist` включён здесь, диалог голосом уместен. Как только микрофон ушёл в другую сессию, доклад становится односторонним - подробности в скиле `voice-answer`, раздел «Доклад голосом - односторонний».
+6. **Long work gets two spoken lines.** Say at once, in one sentence, that you have started, and say it again when you are done. Ten minutes of silence is not acceptable - they are not looking at the screen.
 
-Слушатель сам замолкает, пока ты говоришь: скил озвучки держит замок `~/.claude/tts-cache/.speak.lock`, и запись в это время не идёт. Поэтому свой же голос он не записывает.
+   The answer is always spoken, however long the work took. After five minutes the listener clears "thinking" from the badge itself - that is an indicator, not a cancellation. Reaching an answer after fifteen minutes still means saying it out loud, or as far as the owner is concerned it simply vanished.
 
-Индикация тоже его забота, руками состояние не писать: он ставит «слушаю» на записи, «думаю» с момента, когда фраза ушла тебе, и «говорю», пока держится замок озвучки. Если ты работаешь дольше пяти минут, «думаю» само снимается.
+7. **Do not ask questions out loud when the microphone is not yours.** While `/assist` is on here, a spoken conversation makes sense. Once the microphone moves to another session, reporting becomes one-way - see the `voice-answer` skill, the section on one-way reports.
 
-## Границы
+The listener falls silent by itself while you talk: the speech skill holds the lock at `~/.claude/tts-cache/.speak.lock`, and no recording happens then. That is why it never records your own voice.
 
-- Запуск полноценного Джарвиса забирает микрофон себе: `jarvisd.sh` (и значит ярлык Siri) убивает слушателя агента и чистит его pid-файл. Монитор в этой сессии тогда завершится сам - это нормально, а не поломка.
-- **Монитор упал - не поднимать вслепую.** Сначала посмотреть `~/.claude/jarvis/listener.owner`: там чужое имя сессии или `agents_status.py` говорит, что микрофон занят - значит его забрали намеренно, и делать ничего не надо, только сказать хозяину, где Джарвис теперь. Поднимать заново можно, лишь когда микрофон свободен и он этого просил.
-- **Никогда не делать `pkill` по слушателю руками.** Единственный законный способ забрать микрофон - `take-mic.sh`: он гасит только текущего владельца и пишет, у кого забрал. Голый `pkill -f "jarvis_daemon.py --listen"` бьёт и по чужой сессии - именно так 21.08 был убит Джарвис, только что поднятый в соседнем чате.
-- Слушатель один на машину, файл `~/.claude/jarvis/listener.pid`, имя сессии-хозяина - в `~/.claude/jarvis/listener.owner`. Второй экземпляр не поднимается (`BUSY`), поэтому включение всегда начинается с `take-mic.sh` - забрать, а не встать рядом.
-- Имя хозяина видно в трёх местах: на плашке рядом с состоянием, в строке `LISTENING` при запуске и первой строкой в `agents_status.py`. Последнее работает из любой сессии - именно так отвечают на вопрос «в каком агенте сейчас включён Джарвис».
-- Работает только на Mac1: код в `~/.claude/jarvis/` и модели распознавания в vault не синхронизируются. На второй машине скажи об этом прямо и не пытайся починить.
-- Прав микрофона у терминала может не быть - тогда слушатель упадёт с ошибкой доступа. Передай текст ошибки хозяину, разрешения выдаёт он руками в настройках.
+The indicator is its business too, so never write the state by hand: it sets "listening" while recording, "thinking" from the moment a phrase reaches you, and "talking" while the speech lock is held. Work longer than five minutes and "thinking" clears itself.
+
+## Limits
+
+- Starting the full daemon takes the microphone back: `jarvisd.sh` kills the agent's listener and cleans up its pid file. The monitor in this session then ends on its own - that is normal, not a fault.
+- **The monitor died - do not blindly restart it.** Look at `~/.claude/jarvis/listener.owner` first: another session's name there, or `agents_status.py` saying the microphone is busy, means somebody took it on purpose and there is nothing to do but tell the owner where Jarvis is now. Restart it only when the microphone is free and they asked for it.
+- **Never `pkill` the listener by hand.** The only legitimate way to take the microphone is `take-mic.sh`: it kills the current holder only, and says who that was. A bare `pkill -f "jarvis_daemon.py --listen"` hits other sessions too - that is exactly how a listener that had just been started in another window got killed on 21.08.
+- There is one listener per machine, its pid in `~/.claude/jarvis/listener.pid` and the owning session's name in `~/.claude/jarvis/listener.owner`. A second one refuses to start (`BUSY`), which is why turning it on always begins with `take-mic.sh` - take it, do not stand next to it.
+- The owner's name shows up in three places: on the badge next to the state, in the `LISTENING` line at startup, and as the first line of `agents_status.py`. The last one works from any session - that is how to answer "which agent has Jarvis right now".
+- Works only where the code and the models are installed: `~/.claude/jarvis/` and its `models/` folder do not travel between machines. On a machine without them, say so plainly and do not try to fix it.
+- The terminal may not have microphone permission, and then the listener dies with an access error. Pass the error text on - permissions are granted by hand in System Settings.

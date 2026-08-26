@@ -50,6 +50,7 @@ hint = """В чаты ходит отдельный агент, и только 
 # the thing nobody says by accident. A bare "чат" is the topic, not the name.
 mention_patterns = ['\bслак\w*']
 
+role_file = "roles/chat.ru.md"
 ack_relay = "{label} не в окне терминала, спрошу его через {relay}."
 ack_fallback = "{label} не нашёл, спросил {fallback}."
 ack_missing = "Ни {label}, ни {fallback} не нашёл."

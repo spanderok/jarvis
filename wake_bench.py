@@ -4,14 +4,14 @@
 #                 "numpy<2", "pvporcupine", "pynput", "webrtcvad",
 #                 "kaldi-native-fbank"]
 # ///
-"""How many calls of "Джарвис" does the wake spotter catch in a recording?
+"""How many calls of the wake word does the spotter catch in a recording?
 
     uv run wake_bench.py                     # everything in wake-test/
     uv run wake_bench.py path/to/one.wav     # one file
 
 Both spotters are run over the same audio: the old one with the whole Russian
 dictionary open, and the new one with a grammar of just the name. A fire is
-counted as a new call only after a gap - consecutive frames of one "Джарвис"
+counted as a new call only after a gap - consecutive frames of one call
 would otherwise count as several. The gap is 1.0 s: the daemon's own debounce is
 0.18 s, and calls in the test are made about four seconds apart.
 """
@@ -54,14 +54,14 @@ else:
         os.path.expanduser("~/.claude/jarvis/wake-test"), "*.wav")))
 
 if not files:
-    sys.exit("Записей нет. Сначала: uv run ~/.claude/jarvis/wake_record.py 60")
+    sys.exit("No recordings. First: uv run ~/.claude/jarvis/wake_record.py 60")
 
-print(f"записей: {len(files)}")
+print(f"recordings: {len(files)}")
 for f in files:
     with wave.open(f) as w:
         secs = w.getnframes() / w.getframerate()
     d_p, n_p = calls(f, False)
     d_g, n_g = calls(f, True)
-    print(f"\n{os.path.basename(f)}  ({secs:.1f} с)")
-    print(f"  полный словарь : поймал {d_p} зовов (кадров сработало {n_p})")
-    print(f"  грамматика     : поймал {d_g} зовов (кадров сработало {n_g})")
+    print(f"\n{os.path.basename(f)}  ({secs:.1f}s)")
+    print(f"  full dictionary : caught {d_p} calls ({n_p} frames fired)")
+    print(f"  name-only       : caught {d_g} calls ({n_g} frames fired)")

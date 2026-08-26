@@ -1,27 +1,27 @@
 # Jarvis
 
-A voice assistant for macOS that answers with Claude Code. You say "Джарвис",
-ask a question out loud, and he answers out loud - or hands the work over to a
-Claude session that can actually do it.
+A voice assistant for macOS that answers with Claude Code. You say "Jarvis", ask
+a question out loud, and he answers out loud - or hands the work over to a Claude
+session that can actually do it.
 
 Speech in and speech out are local: no cloud speech service, no audio leaving the
 machine. The answer comes from the `claude` CLI you already have.
 
-He speaks Russian. The wake word is the Russian word "Джарвис", the recognition
-model is Russian, the voice is Russian. Nothing stops you from swapping the model
-and prompts for another language, but out of the box it is Russian only.
+English out of the box, Russian in the box next to it. Everything he says or
+listens for is a config file, so a third language is one more file - see
+[Languages](#languages).
 
 ## One exchange, end to end
 
 1. The wake engine listens to the microphone at 16 kHz. By default that is Vosk,
-   a 46 MB offline Russian recognizer that triggers on the real word "Джарвис" -
-   free, no registration, no network.
+   a 40 MB offline recognizer that triggers on the real word "Jarvis" - free, no
+   registration, no network.
 2. A chime, then he records until you stop talking - or until you press the key,
    which ends the recording immediately.
 3. `parakeet-mlx` transcribes locally. A leading wake word is stripped, so
-   "Джарвис, сколько времени" arrives as "сколько времени".
+   "Jarvis, what time is it" arrives as "what time is it".
 4. `claude -p` answers inside one resumable session, and the reply is spoken by a
-   local Vosk voice.
+   local voice.
 5. For a second and a half after the reply he keeps listening without a wake
    word, so a follow-up question needs no ceremony.
 
@@ -33,7 +33,7 @@ and prompts for another language, but out of the box it is Russian only.
   dependencies in its header, so there is no requirements file and no virtualenv
   to manage.
 - The [`claude` CLI](https://claude.com/claude-code), logged in.
-- About 400 MB of disk for the voice models.
+- About 700 MB of disk for the models.
 
 ## Install
 
@@ -43,10 +43,10 @@ cd ~/.claude/jarvis
 bash install.sh
 ```
 
-The installer downloads the models, links the two skills and three commands into
-`~/.claude`, and creates `jarvis.env` from the example. Clone it somewhere else
-and it symlinks that folder to `~/.claude/jarvis`, because the scripts and skills
-refer to that path.
+The installer downloads the models for your language, links the two skills and
+three commands into `~/.claude`, and creates `jarvis.env` from the example. Clone
+it somewhere else and it symlinks that folder to `~/.claude/jarvis`, because the
+scripts and skills refer to that path.
 
 Then grant two permissions in System Settings -> Privacy & Security:
 
@@ -61,7 +61,7 @@ Start him:
 bash ~/.claude/jarvis/jarvisd.sh
 ```
 
-Say "Джарвис". `Ctrl+C` stops him.
+Say "Jarvis". `Ctrl+C` stops him.
 
 ## The key
 
@@ -77,10 +77,10 @@ doing:
 
 Three ways to get that key, pick one.
 
-**1. A spare key on your keyboard (what I use).** A macro key that sends `End`
-becomes F18, and F18 is the Jarvis key. F18 because F13 is Print Screen on a Mac
-and applications do react to it - a macro key mapped to F13 once wiped a cell in
-Google Sheets. F16..F20 have no system meaning and nothing binds them.
+**1. A spare key on your keyboard.** A macro key that sends `End` becomes F18,
+and F18 is the Jarvis key. F18 because F13 is Print Screen on a Mac and
+applications do react to it - a macro key mapped to F13 once wiped a cell in a
+spreadsheet. F16..F20 have no system meaning and nothing binds them.
 
 ```bash
 bash keymap.sh list        # find your keyboard's VendorID and ProductID
@@ -89,8 +89,8 @@ bash keymap.sh list        # find your keyboard's VendorID and ProductID
 Put them into `jarvis.env`:
 
 ```sh
-JARVIS_KEYMAP_VENDOR=13364
-JARVIS_KEYMAP_PRODUCT=419
+JARVIS_KEYMAP_VENDOR=1234
+JARVIS_KEYMAP_PRODUCT=567
 JARVIS_KEYMAP_SRC=0x4D     # the key you press: End
 JARVIS_KEYMAP_DST=0x6D     # what it becomes: F18
 ```
@@ -139,7 +139,7 @@ edit, restart. The code ships unchanged.
 The one worth setting first:
 
 ```sh
-JARVIS_OWNER=Дмитрий       # empty: he says "the owner of this computer"
+JARVIS_OWNER=Ada           # empty: he says "the owner of this computer"
 ```
 
 ## Two ways to run him
@@ -152,8 +152,8 @@ working in takes the microphone and starts hearing you: you ask out loud, the
 agent does the work in that repository and answers out loud. `/assist-off` gives
 the microphone back, `/jarvis-daemon` returns it to the standalone daemon.
 
-There is one microphone, so only one of them can hold it. Both dropped in
-through the same file lock, and each tells you who it took it from.
+There is one microphone, so only one of them can hold it. Both drop in through
+the same file lock, and each tells you who it took it from.
 
 ## Rooms and actions
 
@@ -161,8 +161,8 @@ He answers most questions himself. The rest either go to a **room** - another
 Claude session in a Terminal window - or set off an **action**, a command that
 runs here and whose output he reads out.
 
-Say "передай шефу выкати демо" and the task is typed into the window of the
-session named `шеф`, where you can watch it work. Say "что сейчас играет" and
+Say "tell the chief to ship the demo" and the task is typed into the window of
+the session named `chief`, where you can watch it work. Say "what's playing" and
 nothing leaves the machine: a script runs and he names the track.
 
 Neither is built in. Both are rows in two TOML files:
@@ -171,25 +171,81 @@ Neither is built in. Both are rows in two TOML files:
 # rooms.d/notes.toml
 [[room]]
 id = "notes"
-label = "заметки"
-session = "заметки"
+label = "notes"
+session = "notes"
 work_dir = "~/notes"
 launch = "room.sh notes"
-ask = ["спроси заметки", "спроси у заметок"]
-tell = ["запиши в заметки"]
-ack_ask = "Спросил заметки."
+ask = ["ask notes", "ask my notes"]
+tell = ["write this down"]
+ack_ask = "Asked your notes."
 ```
 
 `bash room.sh notes` raises it and he can address it. Nothing else was edited -
 not the daemon, not the launcher, not his system prompt, which picks up the
 room's own `hint` line.
 
-The vocabulary is Russian because that is what he hears; the code holds none of
-it. Change the words and he speaks yours.
-
 **[docs/EXTENDING.md](docs/EXTENDING.md)** walks one question end to end, gives
 the order the routes are tried in, and explains the one field that will steal
 your ordinary questions if you set it carelessly.
+
+## Long-term memory
+
+His session forgets everything ten minutes after the last question. Point him at
+a vector store and he stops forgetting:
+
+```toml
+# config/memory.toml
+[memory]
+enabled = true
+recall = "memory.d/recall.sh"      # the question in, context out
+remember = "memory.d/remember.sh"  # the question and the answer in
+timeout_s = 3.0
+```
+
+`recall` is any command that takes a question as its argument and prints plain
+text. That text goes in front of the question before Jarvis is asked:
+
+```
+you say         "what did we decide about the deploys"
+recall runs     memory.d/recall.sh "what did we decide about the deploys"
+it prints       Decided 12 Aug: deploys go out Tuesdays, one person on call.
+he answers      "Tuesdays, with one person on call. That was the twelfth."
+```
+
+A command and not a library on purpose. Chroma, Qdrant, LanceDB, sqlite-vec or a
+grep over a folder of markdown are all a shell script, so none of them becomes a
+dependency of this repository - and a fixed route cannot be talked into reading
+something it was not pointed at. `memory.d/` ships a grep example that needs
+nothing installed, and a Chroma one to copy from.
+
+Off until you switch it on, and it fails open: a store that is down costs you the
+context, never the answer. Check yours with
+`python3 memory.py "a question you would ask"`.
+
+## Languages
+
+`JARVIS_LANG=en` is the default; `JARVIS_LANG=ru` is the other one that ships.
+A language is one file in `locales/`, holding everything he says and listens for:
+
+- the wake word, and the forms a small recognizer mangles it into
+- the stop words, the acknowledgements, the line for a stranger
+- the persona prompt that gives him his manner
+- the models that can handle it - the wake recognizer, the transcriber, the voice
+
+The models come from the locale so that a prompt in one language cannot end up
+read by a voice in another. English speaks through
+[piper](https://github.com/rhasspy/piper) (63 MB a voice, offline, about 0.3 s to
+first sound), Russian through vosk-tts. Any piper voice drops in:
+
+```sh
+JARVIS_VOICE=en_US-lessac-medium         # the shipped default is en_GB-alan-medium
+JARVIS_EXTRA_VOICES="en_US-ryan-high"    # fetched by install.sh alongside it
+```
+
+Adding a third language is copying `locales/en.toml`. The routing vocabulary is
+separate, because it belongs to your rooms rather than to the language -
+`rooms.d/ru.example.toml` is a complete Russian preset showing how far a drop-in
+goes.
 
 ## What else is in the box
 
@@ -204,6 +260,7 @@ Optional pieces, each independent - ignore what you do not need.
 | `tg_listen.py` | ask him from Telegram, by text or voice message |
 | `room.sh` | raise a companion session he can hand work to |
 | `enroll_voice.py` | record a voice print so he only answers you |
+| `memory.py` | the vector-store hook, and a way to test it |
 | `mic_check.py`, `probe_key.py`, `why.sh` | diagnostics when something is off |
 
 ## Privacy

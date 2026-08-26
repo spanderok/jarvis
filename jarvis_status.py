@@ -32,11 +32,11 @@ TITLES = {
     "off": "⛔",
 }
 LABELS = {
-    "idle": "ждёт слова «Джарвис»",
-    "listening": "слушает тебя",
-    "thinking": "думает",
-    "speaking": "говорит",
-    "off": "не запущен",
+    "idle": "waiting for the wake word",
+    "listening": "listening to you",
+    "thinking": "thinking",
+    "speaking": "talking",
+    "off": "not running",
 }
 
 
@@ -69,14 +69,14 @@ class JarvisStatus(rumps.App):
         self.menu = [
             self.status_item,
             None,
-            rumps.MenuItem("Переключись на меня", callback=self.on_tap),
-            rumps.MenuItem("Отбой (сбросить)", callback=self.on_cancel),
+            rumps.MenuItem("Switch to me", callback=self.on_tap),
+            rumps.MenuItem("Stand down (reset)", callback=self.on_cancel),
             None,
-            rumps.MenuItem("Запустить демон", callback=self.on_start),
-            rumps.MenuItem("Остановить демон", callback=self.on_stop),
-            rumps.MenuItem("Открыть лог", callback=self.on_log),
+            rumps.MenuItem("Start the daemon", callback=self.on_start),
+            rumps.MenuItem("Stop the daemon", callback=self.on_stop),
+            rumps.MenuItem("Open the log", callback=self.on_log),
             None,
-            rumps.MenuItem("Выход (индикатор)", callback=rumps.quit_application),
+            rumps.MenuItem("Quit (indicator only)", callback=rumps.quit_application),
         ]
 
     @rumps.timer(0.4)
@@ -93,7 +93,7 @@ class JarvisStatus(rumps.App):
                 state = "idle"
         self.title = TITLES[state]
         suffix = f" (pid {pid})" if pid else ""
-        self.status_item.title = f"Джарвис: {LABELS[state]}{suffix}"
+        self.status_item.title = f"Jarvis: {LABELS[state]}{suffix}"
 
     def on_tap(self, _) -> None:
         self._signal("-USR1")  # one press: wake, or interrupt and listen

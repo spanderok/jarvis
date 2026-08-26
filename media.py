@@ -61,6 +61,6 @@ def paused_apps() -> list[str]:
 if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == "resume":
-        print("вернул:", ", ".join(resume()) or "нечего")
+        print("resumed:", ", ".join(resume()) or "nothing to resume")
     else:
-        print("поставил на паузу:", ", ".join(pause()) or "ничего не играло")
+        print("paused:", ", ".join(pause()) or "nothing was playing")

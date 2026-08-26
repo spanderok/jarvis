@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Отметить сообщение в телеграме как выполненное.
+"""Mark a Telegram message as dealt with.
 
-    python3 ~/.claude/jarvis/tg_ack.py 1234          -> 👌 сделал
-    python3 ~/.claude/jarvis/tg_ack.py 1234 🤔       -> не вышло
+    python3 ~/.claude/jarvis/tg_ack.py 1234          -> 👌 done
+    python3 ~/.claude/jarvis/tg_ack.py 1234 🤔       -> did not work out
 
-Номер сообщения приходит в событии `TGIN#<номер> текст`.
-Telegram принимает только эмодзи из своего списка, «✅» в него не входит.
+The message number arrives in the `TGIN#<number> text` event.
+Telegram only accepts emoji from its own list, and "✅" is not on it.
 """
 import json
 import subprocess
@@ -23,14 +23,14 @@ def secret(name: str) -> str:
 
 def main() -> None:
     if len(sys.argv) < 2:
-        print("нужен номер сообщения")
+        print("a message number is needed")
         return
     mid = sys.argv[1]
     emoji = sys.argv[2] if len(sys.argv) > 2 else "👌"
     if emoji not in ALLOWED:
-        print(f"такой эмодзи телеграм не примет, можно: {' '.join(sorted(ALLOWED))}")
+        print(f"Telegram will not take that emoji, allowed: {' '.join(sorted(ALLOWED))}")
         return
-    token, chat = secret("rocketwatch-telegram-token"), secret("rocketwatch-telegram-chat")
+    token, chat = secret("jarvis-telegram-token"), secret("jarvis-telegram-chat")
     url = (f"https://api.telegram.org/bot{token}/setMessageReaction?"
            + urllib.parse.urlencode({
                "chat_id": chat, "message_id": mid,
@@ -38,31 +38,31 @@ def main() -> None:
     try:
         with urllib.request.urlopen(url, timeout=10) as r:
             ok = json.load(r).get("ok")
-        print(f"{emoji} поставлен" if ok else "не поставился")
+        print(f"{emoji} set" if ok else "it did not go through")
     except Exception as e:
-        print(f"не поставился: {e}")
+        print(f"it did not go through: {e}")
         return
     close_open(mid, emoji)
 
 
 def close_open(mid: str, emoji: str) -> None:
-    """Закрыть дело в списке «принял, но не сделал».
+    """Close an item on the "accepted but not done" list.
 
-    Дописываем строку, а не переписываем файл: список читается так, что по
-    каждому номеру верной считается последняя запись. Так две отметки подряд не
-    портят друг другу файл.
+    A line is appended rather than the file rewritten: the list is read so that
+    the last entry for a number is the true one. Two marks in a row then cannot
+    corrupt each other.
     """
     import os
     import time
     path = os.path.expanduser("~/.claude/jarvis/tg_open.jsonl")
     if emoji not in ("👌", "👍", "🎉", "🔥"):
-        return                      # 👀 и 🤔 дело не закрывают
+        return                      # 👀 and 🤔 do not close anything
     try:
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps({"id": int(mid), "at": time.strftime("%Y-%m-%d %H:%M:%S"),
                                 "text": "", "done": True}, ensure_ascii=False) + "\n")
     except (OSError, ValueError) as e:
-        print(f"в списке дел не отметилось: {e}")
+        print(f"could not mark it on the list: {e}")
 
 
 main()

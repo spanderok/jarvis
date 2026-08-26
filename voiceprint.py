@@ -12,7 +12,7 @@ One utterance, end to end:
      somebody else - and he has to win by a margin.
 
 Why two numbers and not one threshold. Measured on the real profile on 22.08:
-the synthesized Jarvis voice scored 0.65 against the owner's own "обычно" take,
+the synthesized Jarvis voice scored 0.65 against the owner's own neutral take,
 while his tired take scored 0.57 against his other takes. One line cannot
 separate those. But the same synthesized clip scores 0.95 against other clips
 of itself, so "looks like him minus looks like the cohort" lands at -0.31 for
@@ -173,15 +173,15 @@ def check(audio: np.ndarray) -> tuple[bool, float, str]:
     gap = mine - theirs
     if mine < floor:
         return (False, mine,
-                f"чужой голос (на него {mine:.2f} < {floor:.2f}, "
-                f"на чужих {theirs:.2f}, разница {gap:+.2f})")
+                f"not his voice (against him {mine:.2f} < {floor:.2f}, "
+                f"against the cohort {theirs:.2f}, margin {gap:+.2f})")
     if gap < margin:
         return (False, mine,
-                f"чужой голос (на него {mine:.2f}, но на чужих {theirs:.2f}, "
-                f"разница {gap:+.2f} < {margin:+.2f})")
+                f"not his voice (against him {mine:.2f}, but against the cohort "
+                f"{theirs:.2f}, margin {gap:+.2f} < {margin:+.2f})")
     return (True, mine,
-            f"его голос ({mine:.2f} как «{label}», чужие {theirs:.2f}, "
-            f"разница {gap:+.2f})")
+            f"his voice ({mine:.2f} as {label!r}, cohort {theirs:.2f}, "
+            f"margin {gap:+.2f})")
 
 
 def warmup() -> None:

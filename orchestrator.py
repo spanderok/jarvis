@@ -2,15 +2,18 @@
 # requires-python = ">=3.10,<3.13"
 # dependencies = []
 # ///
-"""Talk to the interactive orchestrator session instead of a private one.
+"""Talk to an interactive room session instead of a private one.
 
-Voice text is typed into the Terminal window that runs `claude` in
-~/claude-orchestrator, exactly as if the owner typed it - so the whole dialogue
-stays visible in that window and there is only one Claude with one context.
-The reply is read back off the pane so it can be spoken.
+Voice text is typed into the Terminal window that runs `claude` in the room's
+folder, exactly as if the owner typed it - so the whole dialogue stays visible
+in that window and there is only one Claude with one context. The reply is read
+back off the pane so it can be spoken.
+
+Which folder comes from the default room in config/rooms.toml; JARVIS_ORCH_DIR
+overrides it for a standalone check.
 
 Standalone check:
-  uv run ~/.claude/jarvis/orchestrator.py "скажи одно слово: тест"
+  uv run ~/.claude/jarvis/orchestrator.py "say one word: test"
 """
 import os
 import re
@@ -21,7 +24,21 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pane_filter import speakable
 
-ORCH_DIR = os.environ.get("JARVIS_ORCH_DIR", os.path.expanduser("~/claude-orchestrator"))
+def _default_room_dir() -> str:
+    """The default room's folder, or the home directory when there is none."""
+    try:
+        import plugins
+
+        cfg = plugins.load()
+        room = cfg.room(cfg.default_room) or (cfg.rooms[0] if cfg.rooms else None)
+        if room and room.env_dir():
+            return room.env_dir()
+    except Exception:
+        pass
+    return os.path.expanduser("~")
+
+
+ORCH_DIR = os.environ.get("JARVIS_ORCH_DIR") or _default_room_dir()
 SETTLE_SEC = 1.5     # output is finished once nothing changes for this long
 MAX_WAIT_SEC = 300
 # lines the TUI draws around the conversation
@@ -88,8 +105,8 @@ def ask(text: str, wid: str = "") -> tuple[str, str]:
 
 
 if __name__ == "__main__":
-    q = " ".join(sys.argv[1:]) or "скажи одно слово: тест"
+    q = " ".join(sys.argv[1:]) or "say one word: test"
     t0 = time.monotonic()
     reply, wid = ask(q)
-    print(f"window={wid or 'НЕ НАЙДЕНО'}  {time.monotonic() - t0:.1f}s")
+    print(f"window={wid or 'NOT FOUND'}  {time.monotonic() - t0:.1f}s")
     print(f"reply={reply!r}")

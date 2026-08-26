@@ -84,6 +84,17 @@ tts_voice_url = "https://alphacephei.com/vosk/models/vosk-model-tts-ru-0.7-multi
 edge_voice = "ru-RU-DmitryNeural"
 system_voice = "Yuri"
 
+# Two more system voices of this language, used as the "not him" crowd
+# when a voice print is enrolled.
+cohort_voices = ["Milena", "Yuri"]
+
+
+# --- symbols a voice reads badly ---------------------------------------------
+spoken_swaps = [
+  ["°C", " градусов"],
+  ["..", " до "],
+]
+
 
 # --- fallbacks for rooms and actions -----------------------------------------
 # Each room and action can carry its own wording in config/rooms.toml and
@@ -101,3 +112,32 @@ room_answering = "{label} отвечает."
 session_down = "Сессия Клода не поднялась, посмотри лог."
 no_answer = "Клод не ответил, посмотри лог демона."
 key_only = "Другим агентам передаю только с клавиши. Нажми её и повтори."
+
+
+# --- recording a voice print -------------------------------------------------
+# What enroll_voice.py asks you to say, and how. See locales/en.toml for why
+# there are several takes rather than one average.
+[[enroll]]
+id = "обычно"
+how = "Обычным голосом, как всегда сидишь у мака."
+say = "Джарвис, что там по задачам на сегодня, посмотри пожалуйста"
+[[enroll]]
+id = "близко"
+how = "Ближе к микрофону, чуть тише обычного."
+say = "Джарвис, поставь что-нибудь бодрое из моих плейлистов"
+[[enroll]]
+id = "далеко"
+how = "Отойди на два-три метра и скажи громче."
+say = "Джарвис, сделай погромче и переключи трек, этот не нравится"
+[[enroll]]
+id = "шум"
+how = "Включи музыку или вентилятор, говори поверх шума."
+say = "Джарвис, добавь этот трек в плейлист и скажи что получилось"
+[[enroll]]
+id = "устал"
+how = "Тихо, устало, чуть хрипло - как поздно вечером."
+say = "Джарвис, что там с почтой накопилось, я уже никакой"
+[[enroll]]
+id = "быстро"
+how = "Быстро и небрежно, проглатывая окончания."
+say = "Джарвис, скинь мне в телеграм результат когда закончишь"

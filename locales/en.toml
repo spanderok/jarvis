@@ -96,6 +96,18 @@ edge_voice = "en-GB-RyanNeural"
 # The last resort: always present, no download, plainly a robot.
 system_voice = "Daniel"
 
+# Two more system voices of this language, used as the "not him" crowd
+# when a voice print is enrolled.
+cohort_voices = ["Daniel", "Karen"]
+
+
+# --- symbols a voice reads badly ---------------------------------------------
+# Applied to text scraped off another session's screen before it is spoken.
+# English needs almost none of this; Russian needs more.
+spoken_swaps = [
+  ["..", " to "],
+]
+
 
 # --- fallbacks for rooms and actions -----------------------------------------
 # Each room and action can carry its own wording in config/rooms.toml and
@@ -116,3 +128,34 @@ no_answer = "Claude said nothing, check the daemon log."
 # Handing work to another agent is gated behind the key by default, because a
 # room can be a session that posts messages other people then read.
 key_only = "I only hand work to other agents from the key. Press it and say that again."
+
+
+# --- recording a voice print -------------------------------------------------
+# What enroll_voice.py asks you to say, and how. Several takes rather than one
+# average: a microphone hears a tired voice at arm's length differently from a
+# fresh one leaning in, and a single average sits between the two and matches
+# neither. Each take is kept whole, and a phrase is yours if it matches any one.
+[[enroll]]
+id = "normal"
+how = "Your ordinary voice, sitting at the Mac as usual."
+say = "Jarvis, what is on the list for today, have a look please"
+[[enroll]]
+id = "close"
+how = "Closer to the microphone, a little quieter than usual."
+say = "Jarvis, put something lively on from my playlists"
+[[enroll]]
+id = "far"
+how = "Step two or three metres away and speak up."
+say = "Jarvis, turn it up a bit and skip this track, I do not like it"
+[[enroll]]
+id = "noise"
+how = "Put music or a fan on and talk over it."
+say = "Jarvis, add this track to the playlist and tell me how it went"
+[[enroll]]
+id = "tired"
+how = "Quiet, tired, a little hoarse - the way you sound late at night."
+say = "Jarvis, what has piled up in the mail, I am done for today"
+[[enroll]]
+id = "fast"
+how = "Fast and careless, swallowing the ends of words."
+say = "Jarvis, send me the result on Telegram when you are finished"

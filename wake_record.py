@@ -43,23 +43,23 @@ if os.path.exists(pid_file) and "--force" not in sys.argv:
         if os.path.exists(owner_file):
             owner = open(owner_file).read().strip()
         sys.exit(
-            f"Слушатель жив: pid {pid}, хозяин «{owner}».\n"
-            "Он проснётся на первый услышанный зов и сам поставит музыку на\n"
-            "паузу - остаток записи будет уже не про то, что мы мерим.\n\n"
-            "Освободить микрофон:  bash ~/.claude/jarvis/take-mic.sh\n"
-            "Или записать поверх всё равно:  uv run wake_record.py --force")
+            f"A listener is alive: pid {pid}, session {owner!r}.\n"
+            "It will wake on the first call it hears and pause the music itself -\n"
+            "and the rest of the recording is then no longer what we are measuring.\n\n"
+            "Free the microphone:  bash ~/.claude/jarvis/take-mic.sh\n"
+            "Or record over it anyway:  uv run wake_record.py --force")
     except (ProcessLookupError, ValueError):
         pass
 
 os.makedirs(OUT_DIR, exist_ok=True)
 path = os.path.join(OUT_DIR, time.strftime("%Y%m%d-%H%M%S") + "-music.wav")
 
-print(f"Запись {secs:.0f} секунд в {path}")
-print("Музыку не выключай. Зови «Джарвис» с паузами секунды по четыре.")
+print(f"Recording {secs:.0f} seconds into {path}")
+print("Leave the music on. Call the wake word with about four seconds between calls.")
 for n in (3, 2, 1):
     print(f"  {n}...", flush=True)
     time.sleep(1)
-print("ПОШЛА ЗАПИСЬ", flush=True)
+print("RECORDING", flush=True)
 
 frames = []
 t0 = time.monotonic()
@@ -73,7 +73,7 @@ with sd.InputStream(samplerate=RATE, channels=1, dtype="int16",
         if int(left) != said:
             said = int(left)
             if said % 10 == 0 and said:
-                print(f"  осталось {said} с", flush=True)
+                print(f"  {said}s left", flush=True)
 
 audio = np.concatenate(frames).astype(np.int16).reshape(-1)
 with wave.open(path, "wb") as w:
@@ -83,6 +83,6 @@ with wave.open(path, "wb") as w:
     w.writeframes(audio.tobytes())
 
 peak = int(np.abs(audio).max())
-print(f"\nГотово: {path}")
-print(f"  длина {len(audio) / RATE:.1f} с, пик {peak} из 32767")
-print("Скажи мне, сколько раз ты позвал - я прогоню оба распознавателя.")
+print(f"\nDone: {path}")
+print(f"  length {len(audio) / RATE:.1f}s, peak {peak} of 32767")
+print("Tell me how many times you called - both recognizers get run over it.")

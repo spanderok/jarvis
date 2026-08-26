@@ -116,6 +116,17 @@ class Locale:
     tts_voice_url: str = ""
     edge_voice: str = ""                # network fallback
     system_voice: str = ""              # macOS `say -v`, the last resort
+    # Two more macOS voices of this language, used as the "not him" crowd
+    # when a voice print is enrolled. Free, and already on every Mac.
+    cohort_voices: tuple[str, ...] = ()
+
+    # Symbols a voice reads badly, and the words that replace them, applied to
+    # text scraped off another session's screen. Which symbol needs a word is a
+    # language matter: "°C" is read fine in English and not in Russian.
+    spoken_swaps: tuple[tuple[str, str], ...] = ()
+
+    # Conditions enroll_voice.py records, as (id, how to say it, what to say).
+    enroll: tuple[tuple[str, str, str], ...] = ()
 
     # What he says about a room or an action that carries no wording of its
     # own. Read through `say()` so a missing key is a loud KeyError at start,
@@ -235,6 +246,17 @@ def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
                                   and "{peer}" in text["relay_ask"]):
         raise LocaleError(f"{src}: relay_ask must contain {{peer}} and {{q}}")
 
+    takes = data.get("enroll", [])
+    if not isinstance(takes, list) or any(
+            not isinstance(t, dict) or not (t.get("id") and t.get("say"))
+            for t in takes):
+        raise LocaleError(f"{src}: every [[enroll]] needs an id and a say line")
+
+    swaps = data.get("spoken_swaps", [])
+    if not isinstance(swaps, list) or any(
+            not (isinstance(pair, list) and len(pair) == 2) for pair in swaps):
+        raise LocaleError(f"{src}: spoken_swaps must be a list of [symbol, word] pairs")
+
     lower = lambda seq: frozenset(w.lower() for w in seq)   # noqa: E731
     return Locale(
         lang=lang,
@@ -249,6 +271,10 @@ def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
         stop_words=lower(_as_tuple(data["stop_words"], "stop_words", src)),
         reset_words=lower(_as_tuple(data["reset_words"], "reset_words", src)),
         word_re=word_re, strip_re=strip_re, script_re=script_re,
+        spoken_swaps=tuple((str(a), str(b)) for a, b in swaps),
+        cohort_voices=_as_tuple(data.get("cohort_voices", []), "cohort_voices", src),
+        enroll=tuple((str(t["id"]), str(t.get("how", "")), str(t["say"]))
+                     for t in takes),
         fallbacks=fallbacks, source=src, **text)
 
 

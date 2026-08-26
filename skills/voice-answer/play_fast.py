@@ -2,12 +2,12 @@
 
 Time to first sound barely depends on the length of the text - it is a fixed cost
 on the service side - but it collapses on a very short piece: measured on
-20.08 with ru-RU-the ownerNeural, "Готово." started in 0.43 s while a 22-character
+20.08 with a neural network voice, a one-word reply started in 0.43 s while a
 sentence took 3.36 s. So the text is cut into pieces, the first one deliberately
 tiny, and every piece is synthesised while the previous one is still playing.
 
 Run through uvx so edge_tts is available:
-  uvx --from edge-tts python play_fast.py "текст"
+  uvx --from edge-tts python play_fast.py "text"
 """
 import asyncio
 import hashlib
@@ -30,7 +30,7 @@ CACHE = pathlib.Path(os.path.expanduser("~/.claude/tts-cache"))
 # Deliberately one word: 24 characters looked small but still cost 4.2 s to the
 # first sound, because the service charges almost the same for 7 and 69
 # characters - the cliff is between "one word" and "a phrase". Measured 20.08:
-# "Готово." 0.43-0.80 s, 22 characters 3.36 s. The daemon uses 6 for the same
+# one word 0.43-0.80 s, 22 characters 3.36 s. The daemon uses 6 for the same
 # reason.
 FIRST_MAX = int(os.environ.get("JARVIS_FIRST_CHUNK", "10"))
 NEXT_MAX = int(os.environ.get("JARVIS_NEXT_CHUNK", "220"))
@@ -81,7 +81,7 @@ def cache_path(piece: str) -> pathlib.Path:
 
 def stamp(label: str) -> None:
     if os.environ.get("JARVIS_TTS_TIMING") == "1":
-        print(f"  {label}: {time.monotonic() - STARTED:.2f} с", file=sys.stderr)
+        print(f"  {label}: {time.monotonic() - STARTED:.2f}s", file=sys.stderr)
 
 
 async def synth(piece: str) -> pathlib.Path:
@@ -92,11 +92,11 @@ async def synth(piece: str) -> pathlib.Path:
     tmp = path.with_suffix(".mp3.part")
     data = bytearray()
     comm = edge_tts.Communicate(piece, VOICE, rate=RATE)
-    stamp(f"соединение открываю ({len(piece)} знаков)")
+    stamp(f"opening the connection ({len(piece)} characters)")
     async for chunk in comm.stream():
         if chunk["type"] == "audio":
             if not data:
-                stamp("первые байты от сервиса")
+                stamp("first bytes from the service")
             data += chunk["data"]
     if not data:
         raise RuntimeError("no audio")
@@ -108,10 +108,10 @@ async def synth(piece: str) -> pathlib.Path:
 async def main() -> int:
     text = " ".join(sys.argv[1:]).strip()
     if not text:
-        print("нечего говорить", file=sys.stderr)
+        print("nothing to say", file=sys.stderr)
         return 1
     started = STARTED
-    stamp("питон запущен, модуль импортирован")
+    stamp("python is up, the module is imported")
     CACHE.mkdir(parents=True, exist_ok=True)
     pieces = split_pieces(text)
     # One synthesis in flight at a time, the next one prepared while the current
@@ -129,17 +129,17 @@ async def main() -> int:
         return asyncio.create_task(asyncio.wait_for(synth(piece), SYNTH_TIMEOUT))
 
     ahead = start(pieces[0])
-    spoken = 0      # если ни один кусок не прозвучал, вызвавший должен это узнать
-    missed: list[str] = []  # что сервис не осилил - дочитаем системным голосом
+    spoken = 0      # if no chunk was spoken, the caller has to find out
+    missed: list[str] = []  # what the service could not manage - read by the system voice
     for i in range(len(pieces)):
         try:
             path = await ahead
         except asyncio.TimeoutError:
-            print(f"кусок не успел за {SYNTH_TIMEOUT:.0f} с", file=sys.stderr)
+            print(f"a chunk did not make it in {SYNTH_TIMEOUT:.0f}s", file=sys.stderr)
             missed.append(pieces[i])
             path = None
         except Exception as e:  # a failed piece must not swallow the rest
-            print(f"кусок не озвучился: {e}", file=sys.stderr)
+            print(f"a chunk would not render: {e}", file=sys.stderr)
             missed.append(pieces[i])
             path = None
         ahead = start(pieces[i + 1]) if i + 1 < len(pieces) else None
@@ -150,10 +150,10 @@ async def main() -> int:
             await player.stdin.drain()
             spoken += 1
             if i == 0 and os.environ.get("JARVIS_TTS_TIMING") == "1":
-                print(f"первый кусок ушёл в звук через {time.monotonic() - started:.2f} с",
+                print(f"first chunk reached the speaker in {time.monotonic() - started:.2f}s",
                       file=sys.stderr)
         except (BrokenPipeError, ConnectionResetError):
-            break  # его заглушили клавишей или командой стоп
+            break  # silenced by the key or by a stop command
     if ahead is not None:
         ahead.cancel()
     try:
@@ -161,17 +161,19 @@ async def main() -> int:
     except (BrokenPipeError, OSError):
         pass
     await player.wait()
-    # Часть фразы могла не озвучиться - дочитываем её системным голосом здесь же.
-    # Иначе получалось хуже тишины: начало сказано, а хвост пропал незаметно.
+    # Part of the phrase may not have rendered - the system voice reads that part
+    # here. Otherwise the result is worse than silence: the opening gets said and
+    # the tail disappears without anyone noticing.
     if missed and spoken:
         tail = " ".join(missed)
-        print(f"дочитываю системным голосом: {tail[:60]!r}", file=sys.stderr)
+        print(f"reading the rest with the system voice: {tail[:60]!r}", file=sys.stderr)
         proc = await asyncio.create_subprocess_exec(
             "say", "-v", "Yuri", tail,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
         await proc.wait()
-    # Ненулевой код - сигнал вызвавшему сказать всё то же самое системным голосом.
-    # Без него сбой сервиса ("No audio was received") заканчивался тишиной.
+    # A non-zero exit tells the caller to say the whole thing with the system
+    # voice. Without it a service failure ("No audio was received") ended in
+    # silence.
     return 0 if spoken else 1
 
 

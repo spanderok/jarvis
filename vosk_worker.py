@@ -34,7 +34,7 @@ MODEL_DIR = os.path.join(JARVIS_DIR, "models", "vosk-0.7")
 CACHE_DIR = os.path.join(JARVIS_DIR, "cache-vosk")
 SPEAKER = int(os.environ.get("JARVIS_VOSK_SPEAKER", "4"))
 # How much the model is allowed to jitter the length of every sound. The model
-# ships with 0.8, and that jitter is what ate short words: "игр" and "таба" drew a
+# ships with 0.8, and that jitter is what ate short words: one-syllable ones drew a
 # short duration by luck and smeared. Measured on one phrase said five times over,
 # at 0.8 the length wandered by 0.56 s, at 0.2 by 0.09 s. the owner picked the steady
 # version by ear on 21.08, then asked twice for more of the life back: 0.4 first,
@@ -42,7 +42,7 @@ SPEAKER = int(os.environ.get("JARVIS_VOSK_SPEAKER", "4"))
 DURATION_NOISE = float(os.environ.get("JARVIS_DURATION_NOISE", "0.5"))
 # Speed of speech, 1.0 is what the model ships with. Never passed until 21.08, so
 # the model default stood; the owner asked for ten percent slower after hearing the
-# day read back - short words like "игр" and "таба" were smearing at full speed.
+# day read back - short one-syllable words were smearing at full speed.
 SPEECH_RATE = float(os.environ.get("JARVIS_SPEECH_RATE", "0.9"))
 IDLE_UNLOAD = float(os.environ.get("JARVIS_VOSK_IDLE", "180"))
 STOP_FILE = os.path.join(JARVIS_DIR, "speak.stop")

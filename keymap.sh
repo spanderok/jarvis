@@ -6,7 +6,7 @@
 #   keymap.sh off       undo it
 #
 # Configure it in ~/.claude/jarvis/jarvis.env (see jarvis.env.example):
-#   JARVIS_KEYMAP_VENDOR   VendorID of the keyboard, e.g. 13364 (Keychron)
+#   JARVIS_KEYMAP_VENDOR   VendorID of the keyboard, from `keymap.sh list`
 #   JARVIS_KEYMAP_PRODUCT  ProductID of the keyboard, e.g. 419
 #   JARVIS_KEYMAP_SRC      HID usage of the key you press, default 0x4D (End)
 #   JARVIS_KEYMAP_DST      HID usage it becomes, default 0x6D (F18)

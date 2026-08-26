@@ -25,7 +25,7 @@ case "${1:-khaki}" in
   subtle)  BG="6939,7453,6168" ;;  # #1B1D18
   olive)   BG="7967,8481,5911" ;;  # #1F2117
   default) BG=""               ;;
-  *) echo "неизвестная палитра: $1 (khaki, subtle, olive, default)" >&2; exit 1 ;;
+  *) echo "unknown palette: $1 (khaki, subtle, olive, default)" >&2; exit 1 ;;
 esac
 
 TTY=$(tty 2>/dev/null)

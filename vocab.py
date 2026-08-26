@@ -54,7 +54,7 @@ def _load_replacements() -> list[tuple[str, str]]:
                 part = part.strip()
                 if part and part.lower() != target.lower():
                     pairs.append((part, target))
-    # longest first, so "мерж реквест" wins over "мерж"
+    # longest first, so a two-word term wins over its first word alone
     return sorted(pairs, key=lambda p: -len(p[0]))
 
 
@@ -92,8 +92,8 @@ def correct(text: str) -> str:
 
 if __name__ == "__main__":
     print(f"terms: {len(TERMS)}, replacements: {len(REPLACEMENTS)}")
-    for probe in ["сделай ревью мерш реквест 15900",
-                  "проверь pipeline и сентри",
-                  "посмотри джобу в гитлабе",
-                  "погода в валенсии завтра"]:
+    for probe in ["review merj request 15900",
+                  "check the pipeline and sentri",
+                  "look at the job in gitlub",
+                  "weather in valencia tomorrow"]:
         print(f"  {probe!r} -> {correct(probe)!r}")
