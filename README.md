@@ -7,7 +7,14 @@ macOS on Apple silicon, everything spoken stays on the machine, MIT.
 ![macOS, Apple silicon](https://img.shields.io/badge/macOS-Apple%20silicon-111111)
 ![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757)
 ![speech stays local](https://img.shields.io/badge/speech-100%25%20on%20device-2ea44f)
+![costs nothing extra](https://img.shields.io/badge/extra%20cost-%240-2ea44f)
 ![license MIT](https://img.shields.io/badge/license-MIT-3b82f6)
+
+> **Free. No account, no API key, no second subscription.** The only thing you
+> pay for is the Claude subscription you already have. Every speech model here
+> is free and runs on your Mac - hearing, transcribing and talking cost no
+> tokens at all. A spoken question costs exactly what the same question typed
+> into Claude Code would, and not one token more.
 
 | asleep | listening | thinking | speaking |
 |---|---|---|---|
