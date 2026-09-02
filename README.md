@@ -339,6 +339,16 @@ doing", "anything new from Petrov" - status questions that used to mean sitting
 down and typing. He is listening at 2 % of a core, so leaving him on all day
 costs nothing.
 
+**Music without touching the keyboard.** "Jarvis, turn it down", "next track",
+"what's playing", "put on something calm for the evening" - the `music` action
+and the `spotify` skill drive the Spotify app on the Mac. Pause, volume and
+skipping work out of the box, over AppleScript, with nothing to set up. Playing
+something *by name* - a track, an album, one of your own playlists - needs a
+free Spotify developer app and two keys in the Keychain, plus a one-time
+browser login for your playlists. Ten minutes, all of it in
+[`skills/spotify/SKILL.md`](skills/spotify/SKILL.md). He never announces the
+music he just started: you asked for music, not for a voice over it.
+
 **Not at the desk at all?** `speak.sh --telegram` sends the same sentence as a
 voice message to your phone, and `tg_listen.py` takes questions back the same
 way. During a video call the skill switches to Telegram on its own, so the room
