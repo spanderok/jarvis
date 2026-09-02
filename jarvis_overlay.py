@@ -44,6 +44,7 @@ from AppKit import (NSApplication, NSApplicationActivationPolicyAccessory, NSCol
                     NSWindowStyleMaskBorderless,
                     NSWindowStyleMaskNonactivatingPanel)
 from AppKit import NSEvent
+from AppKit import NSApplicationDidChangeScreenParametersNotification, NSNotificationCenter
 from Foundation import (NSAttributedString, NSMakeRect, NSMutableAttributedString,
                         NSObject, NSTimer)
 from Quartz import (CABasicAnimation, CAGradientLayer, CAKeyframeAnimation, CALayer,
@@ -279,6 +280,8 @@ class Capsule(NSObject):
                 self.spot = (float(x), float(y))
             except (OSError, ValueError):
                 pass
+        NSNotificationCenter.defaultCenter().addObserver_selector_name_object_(
+            self, "screensChanged:", NSApplicationDidChangeScreenParametersNotification, None)
         return self
 
     # ── layer tree ─────────────────────────────────────────────────────────────
@@ -516,11 +519,39 @@ class Capsule(NSObject):
 
     @objc.python_method
     def place(self):
-        rect = self.window_frame(NSScreen.mainScreen())
+        screen = NSScreen.mainScreen()
+        rect = self.window_frame(screen)
         if self.spot:
             x = self.spot[0] - WIN_W if self.right_anchored else self.spot[0]
             rect = NSMakeRect(x, self.spot[1], WIN_W, WIN_H)
+            # The remembered spot may belong to a display that is no longer
+            # there - dragged on the external monitor, restored on the laptop -
+            # and then the badge sits outside the visible area and looks gone.
+            # Only the capsule has to be on screen, not the whole 400 pt window.
+            vis = screen.visibleFrame()
+            cap_r = rect.origin.x + WIN_W - SHADOW_ROOM if self.right_anchored \
+                else rect.origin.x + SHADOW_ROOM + COLLAPSED_W
+            cap_l = cap_r - COLLAPSED_W
+            on_screen = (cap_l >= vis.origin.x
+                         and cap_r <= vis.origin.x + vis.size.width
+                         and rect.origin.y >= vis.origin.y
+                         and rect.origin.y + WIN_H <= vis.origin.y + vis.size.height)
+            if not on_screen:
+                print("capsule: remembered spot is off this screen, back to the corner", flush=True)
+                self.spot = None
+                try:
+                    POS_FILE.unlink()
+                except OSError:
+                    pass
+                rect = self.window_frame(screen)
         self.panel.setFrame_display_(rect, False)
+
+    def screensChanged_(self, note):
+        # A monitor was plugged in or pulled out: the frame we hold may now be
+        # in a space that no longer exists. Re-place while visible; a hidden
+        # badge is placed anyway the next time it is shown.
+        if self.shown:
+            self.place()
 
     # ── state machine ──────────────────────────────────────────────────────────
 
