@@ -41,6 +41,14 @@ works, how to install him in fifteen minutes, and everything else.
 *What the daemon prints while this happens. Log lines are the real format;
 the timings are typical for an M-series Mac.*
 
+| asleep | thinking | speaking |
+|---|---|---|
+| ![The badge folded into a small ring while nothing is happening](docs/img/badge-asleep.png) | ![The badge unfolded: THINKING, the name of the session that holds the microphone, a small swarm of dots at work](docs/img/badge-thinking.png) | ![The badge showing SPEAKING with the waveform of the phrase being said](docs/img/badge-speaking.png) |
+
+*The badge (`overlay.sh`) floats above every window and tells you what he is
+doing and which session holds the microphone - here, one named `agent`. It
+folds into a ring when idle and can be dragged anywhere.*
+
 ## One exchange, end to end
 
 1. The wake engine listens to the microphone at 16 kHz. By default that is Vosk,
