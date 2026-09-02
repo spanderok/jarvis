@@ -106,7 +106,22 @@ it: the question as text, and the answer as text.*
 
 ## Install
 
-Fifteen minutes, most of it downloads. Four steps, then a check.
+Fifteen minutes, most of it downloads. Two ways to spend them.
+
+**Let Claude do it.** Open Claude Code in any folder and paste this:
+
+```
+Install https://github.com/spanderok/jarvis on this Mac. Follow its README:
+clone it to ~/.claude/jarvis, run install.sh, run the checks, and tell me
+which permissions I have to grant by hand in System Settings.
+```
+
+The agent reads this page, runs the same steps as below and stops at the two
+things only you can do - the Microphone and Input Monitoring toggles. That is
+the point of the design: the installer is plain shell, the checks print plain
+text, so an agent can drive it and read the result.
+
+**Or do it yourself.** Four steps, then a check.
 
 ### Before you start
 
