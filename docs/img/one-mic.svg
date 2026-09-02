@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" width="960" height="400" role="img" aria-label="One microphone per machine. Either the standalone daemon holds it or one Claude Code session with /assist does; take-mic.sh moves it and says who had it. Any session can still speak through the voice-answer skill, and the owner's spoken reply lands with whoever holds the microphone.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9ced6"/>
+    </marker>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6cb6ff"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eaed; }
+    .muted { fill: #9aa0a6; font-size: 12px; }
+    .label { font-size: 14px; font-weight: 600; }
+    .small { font-size: 12px; }
+    .box { fill: #1e2128; stroke: #3a3f4a; stroke-width: 1.5; }
+    .edge { stroke: #c9ced6; stroke-width: 1.5; fill: none; }
+    .blue { stroke: #6cb6ff; }
+    .blue-t { fill: #6cb6ff; }
+    .green-t { fill: #5fd68a; }
+    .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  </style>
+
+  <rect x="0" y="0" width="960" height="400" rx="14" fill="#14161b"/>
+
+  <!-- the microphone -->
+  <rect x="380" y="150" width="200" height="84" rx="10" class="box" stroke="#5fd68a"/>
+  <text x="480" y="178" class="label green-t" text-anchor="middle">the microphone</text>
+  <text x="480" y="197" class="small" text-anchor="middle">one per machine</text>
+  <text x="480" y="216" class="mono" text-anchor="middle" fill="#9aa0a6">listener.pid  listener.owner</text>
+
+  <!-- left: daemon -->
+  <rect x="30" y="130" width="240" height="124" rx="10" class="box"/>
+  <text x="150" y="156" class="label" text-anchor="middle">standalone daemon</text>
+  <text x="150" y="174" class="mono" text-anchor="middle" fill="#9aa0a6">jarvisd.sh</text>
+  <text x="150" y="196" class="small" text-anchor="middle">his own Claude session answers,</text>
+  <text x="150" y="213" class="small" text-anchor="middle">heavy work goes to a room</text>
+  <text x="150" y="236" class="muted" text-anchor="middle">no wake word needed after the key</text>
+
+  <!-- right: agent session -->
+  <rect x="690" y="130" width="240" height="124" rx="10" class="box" stroke="#6cb6ff"/>
+  <text x="810" y="156" class="label blue-t" text-anchor="middle">a Claude Code session</text>
+  <text x="810" y="174" class="mono" text-anchor="middle" fill="#9aa0a6">/assist</text>
+  <text x="810" y="196" class="small" text-anchor="middle">the agent you already work with</text>
+  <text x="810" y="213" class="small" text-anchor="middle">hears you, works in the repo,</text>
+  <text x="810" y="230" class="small" text-anchor="middle">speaks the result</text>
+
+  <!-- holding arrows -->
+  <path d="M270,176 L378,176" class="edge" marker-end="url(#arrow)"/>
+  <text x="324" y="166" class="muted" text-anchor="middle">holds it</text>
+  <path d="M690,176 L582,176" class="edge blue" marker-end="url(#arrow-blue)"/>
+  <text x="636" y="166" class="muted" text-anchor="middle">or holds it</text>
+
+  <!-- switching arrows, top -->
+  <path d="M150,130 L150,70 L810,70 L810,128" class="edge blue" marker-end="url(#arrow-blue)"/>
+  <text x="480" y="60" class="small blue-t" text-anchor="middle">/assist in the session: take-mic.sh stops the daemon, says who had it, starts a listener here</text>
+
+  <!-- switching arrows, bottom -->
+  <path d="M810,254 L810,300 L150,300 L150,256" class="edge" marker-end="url(#arrow)"/>
+  <text x="480" y="320" class="small" text-anchor="middle">/jarvis-daemon in any session: kills the listener, starts the daemon again</text>
+
+  <!-- footer facts -->
+  <text x="480" y="362" class="muted" text-anchor="middle">Any session may still talk through the voice-answer skill without the microphone - one voice at a time, a lock in ~/.claude/tts-cache.</text>
+  <text x="480" y="382" class="muted" text-anchor="middle">Your spoken reply lands with whoever holds the microphone; it forwards it by name to the session that asked (last_speaker).</text>
+</svg>

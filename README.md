@@ -36,6 +36,11 @@ call from a shell script. Two languages ship; a third is one more file.
 Free models, no accounts, about 800 MB of disk, MIT. Below: how one exchange
 works, how to install him in fifteen minutes, and everything else.
 
+![The daemon's log: it comes up, hears the wake word, transcribes "what time did the build finish", Claude answers in under two seconds, and the next phrase is typed into a live agent's window](docs/img/terminal.svg)
+
+*What the daemon prints while this happens. Log lines are the real format;
+the timings are typical for an M-series Mac.*
+
 ## One exchange, end to end
 
 1. The wake engine listens to the microphone at 16 kHz. By default that is Vosk,
@@ -49,6 +54,11 @@ works, how to install him in fifteen minutes, and everything else.
    local voice - piper for English, vosk-tts for Russian.
 5. For a second and a half after the reply he keeps listening without a wake
    word, so a follow-up question needs no ceremony.
+
+![The pipeline: microphone, wake word, recorder, speech to text, Claude, voice and speakers all inside the Mac; only the question and the answer, as text, cross to the Anthropic API](docs/img/exchange.svg)
+
+*The dashed box is your Mac. Two amber arrows are the only thing that leaves
+it: the question as text, and the answer as text.*
 
 ## Install
 
@@ -488,6 +498,12 @@ the microphone back, `/jarvis-daemon` returns it to the standalone daemon.
 There is one microphone, so only one of them can hold it. Both drop in through
 the same file lock, and each tells you who it took it from.
 
+![One microphone per machine: the standalone daemon or one Claude Code session holds it; /assist moves it to the session, /jarvis-daemon moves it back](docs/img/one-mic.svg)
+
+*Who holds the microphone, and the two commands that move it. Any session can
+still speak through the voice-answer skill; your spoken reply always lands with
+the holder, which forwards it by name.*
+
 ## Rooms and actions
 
 He answers most questions himself. The rest either go to a **room** - another
@@ -516,6 +532,12 @@ ack_ask = "Asked your notes."
 `bash room.sh notes` raises it and he can address it. Nothing else was edited -
 not the daemon, not the launcher, not his system prompt, which picks up the
 room's own `hint` line.
+
+![Where a heard phrase goes, in order: an order to a room, an action pattern, a mention word, otherwise Jarvis answers himself](docs/img/routing.svg)
+
+*The routes, in the order they are tried. First match wins; an order always
+outranks an automatic route, so "tell the chief what's playing" goes to the
+chief, not to Spotify.*
 
 Out of the box `config/rooms.toml` declares one room, `chief`, a working agent
 started in `~/projects` - change `work_dir` to your own folder, or override it

@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" width="960" height="420" role="img" aria-label="One exchange: the microphone, wake word, recorder, transcriber, Claude and the voice all run on the Mac; only the text of the question and the answer cross to the Anthropic API.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9ced6"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#f0b35a"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eaed; }
+    .muted { fill: #9aa0a6; font-size: 12px; }
+    .label { font-size: 14px; font-weight: 600; }
+    .small { font-size: 12px; }
+    .box { fill: #1e2128; stroke: #3a3f4a; stroke-width: 1.5; }
+    .edge { stroke: #c9ced6; stroke-width: 1.5; fill: none; }
+    .amber { stroke: #f0b35a; }
+    .amber-t { fill: #f0b35a; }
+    .green-t { fill: #5fd68a; }
+    .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+  </style>
+
+  <rect x="0" y="0" width="960" height="420" rx="14" fill="#14161b"/>
+
+  <!-- the machine boundary -->
+  <rect x="22" y="22" width="690" height="376" rx="12" fill="none" stroke="#5fd68a" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <text x="40" y="46" class="label green-t">Your Mac</text>
+  <text x="120" y="46" class="muted">everything in this box runs offline, no audio ever leaves</text>
+
+  <!-- row 1: hearing -->
+  <rect x="40" y="80" width="130" height="64" rx="8" class="box"/>
+  <text x="105" y="106" class="label" text-anchor="middle">microphone</text>
+  <text x="105" y="126" class="muted" text-anchor="middle">16 kHz, mono</text>
+
+  <line x1="170" y1="112" x2="206" y2="112" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="208" y="80" width="150" height="64" rx="8" class="box"/>
+  <text x="283" y="102" class="label" text-anchor="middle">wake word</text>
+  <text x="283" y="119" class="small" text-anchor="middle">Vosk hears "Jarvis"</text>
+  <text x="283" y="135" class="muted" text-anchor="middle">41 MB</text>
+
+  <line x1="358" y1="112" x2="394" y2="112" class="edge" marker-end="url(#arrow)"/>
+  <text x="376" y="72" class="muted" text-anchor="middle">chime</text>
+
+  <rect x="396" y="80" width="150" height="64" rx="8" class="box"/>
+  <text x="471" y="102" class="label" text-anchor="middle">recorder</text>
+  <text x="471" y="119" class="small" text-anchor="middle">until you stop talking</text>
+  <text x="471" y="135" class="muted" text-anchor="middle">or until the key</text>
+
+  <line x1="546" y1="112" x2="582" y2="112" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="584" y="80" width="112" height="64" rx="8" class="box"/>
+  <text x="640" y="102" class="label" text-anchor="middle">speech to text</text>
+  <text x="640" y="119" class="small" text-anchor="middle">parakeet-mlx</text>
+  <text x="640" y="135" class="muted" text-anchor="middle">600 MB</text>
+
+  <!-- the question, down to claude -->
+  <path d="M640,144 L640,190 L600,190 L600,230" class="edge" marker-end="url(#arrow)"/>
+  <text x="590" y="212" class="mono" text-anchor="end">"what time did the build finish"</text>
+
+  <!-- row 2: answering -->
+  <rect x="396" y="232" width="248" height="72" rx="8" class="box"/>
+  <text x="520" y="256" class="label" text-anchor="middle">claude -p</text>
+  <text x="520" y="274" class="small" text-anchor="middle">one resumable session, your own CLI</text>
+  <text x="520" y="291" class="muted" text-anchor="middle">forgets after ten quiet minutes</text>
+
+  <path d="M396,268 L360,268" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="208" y="232" width="150" height="72" rx="8" class="box"/>
+  <text x="283" y="256" class="label" text-anchor="middle">voice</text>
+  <text x="283" y="274" class="small" text-anchor="middle">piper (en) / vosk-tts (ru)</text>
+  <text x="283" y="291" class="muted" text-anchor="middle">63 MB, 0.3 s to first sound</text>
+
+  <path d="M208,268 L172,268" class="edge" marker-end="url(#arrow)"/>
+
+  <rect x="40" y="232" width="130" height="72" rx="8" class="box"/>
+  <text x="105" y="262" class="label" text-anchor="middle">speakers</text>
+  <text x="105" y="282" class="muted" text-anchor="middle">"Eleven forty."</text>
+
+  <!-- follow-up window -->
+  <path d="M105,304 L105,350 L190,350 L190,162 L471,162 L471,146" class="edge" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+  <text x="288" y="368" class="muted" text-anchor="middle">1.5 s after the answer he still listens - a follow-up needs no wake word</text>
+
+  <!-- outside: the API -->
+  <rect x="760" y="232" width="176" height="72" rx="8" class="box" stroke="#f0b35a"/>
+  <text x="848" y="262" class="label amber-t" text-anchor="middle">Anthropic API</text>
+  <text x="848" y="282" class="muted" text-anchor="middle">the only hop off the machine</text>
+
+  <path d="M644,256 L758,256" class="edge amber" marker-end="url(#arrow-amber)"/>
+  <text x="701" y="246" class="small amber-t" text-anchor="middle">the question, as text</text>
+  <path d="M758,284 L646,284" class="edge amber" marker-end="url(#arrow-amber)"/>
+  <text x="701" y="302" class="small amber-t" text-anchor="middle">the answer, as text</text>
+
+  <text x="848" y="120" class="muted" text-anchor="middle">no audio, no voice print,</text>
+  <text x="848" y="138" class="muted" text-anchor="middle">no transcript log</text>
+  <text x="848" y="156" class="muted" text-anchor="middle">ever crosses this line</text>
+</svg>
