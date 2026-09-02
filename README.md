@@ -1,56 +1,82 @@
 # Jarvis
 
-Say "Jarvis" anywhere in the room, and your Mac answers out loud - in a calm
-British voice, with Claude behind it. Ask what time the build finished and he
-tells you. Say "tell the chief to fix the failing test" and the words land in a
-live Claude Code session that goes and does it, then reports back, out loud,
-while you are still making coffee.
+**A voice for Claude Code.** Say "Jarvis" anywhere in the room and your Mac
+answers out loud - and the agent you already work with does the work.
+macOS on Apple silicon, everything spoken stays on the machine, MIT.
 
-**He is ears and a mouth for the agent you already have.** Jarvis has no brain
-of his own: he runs on Claude Code. Type `/assist` in any session and that
-session hears you and talks back - with every tool, every MCP server and every
-project rule that session already has. Ask "is the pipeline green" and the
-agent that can read your CI answers; say "tell me out loud when the tests are
-done" and it does, while you are in another window or another room.
-
-**Nothing you say leaves the machine.** Hearing the wake word, turning speech
-into text, turning the answer into a voice - all of it runs locally on Apple
-silicon, no cloud speech service, no audio uploaded anywhere. The only thing
-that goes out is the text of your question, to the same `claude` CLI you
-already use.
-
-**And it costs almost nothing to keep on.** Listening for the wake word takes
-about 2 % of one core and 120 MB; the badge another 40 MB. The big models
-wake up for a fraction of a second per phrase and go back to sleep -
-[measured numbers below](#what-it-costs-your-mac).
-
-**He can know your voice - if you want.** Off by default. Six minutes of
-enrolment and he answers you and only you; a colleague leaning into your
-microphone gets a polite "sorry, I only talk to the owner of this computer".
-
-**One key beats every recognizer.** A spare key on your keyboard means "switch
-to me": it ends your sentence, interrupts him mid-word, or wakes him with no
-wake word at all.
-
-**You teach him new tricks in a config file, not in Python.** Want "what's
-playing" to run a script and read its output? Want "tell the reviewer" to type
-the rest of the sentence into a second Claude session? Each is a few lines in a
-settings file. Want him to remember last month's decisions? Point him at your
-notes with a one-line script. English and Russian come in the box; another
-language is one more text file with the phrases translated.
-
-Free models, no accounts, about 2.6 GB of disk, MIT. Below: how one exchange
-works, how to install him in fifteen minutes, and everything else.
+![macOS, Apple silicon](https://img.shields.io/badge/macOS-Apple%20silicon-111111)
+![runs on Claude Code](https://img.shields.io/badge/runs%20on-Claude%20Code-d97757)
+![speech stays local](https://img.shields.io/badge/speech-100%25%20on%20device-2ea44f)
+![license MIT](https://img.shields.io/badge/license-MIT-3b82f6)
 
 | asleep | listening | thinking | speaking |
 |---|---|---|---|
 | ![The badge folded into a small ring while nothing is happening](docs/img/badge-asleep.png) | ![The badge showing LISTENING with the live waveform of your voice](docs/img/badge-listening.png) | ![The badge unfolded: THINKING, the name of the session that holds the microphone, a small swarm of dots at work](docs/img/badge-thinking.png) | ![The badge showing SPEAKING with the waveform of the phrase being said](docs/img/badge-speaking.png) |
 
-*The badge (`overlay.sh`) floats above every window and tells you what he is
-doing and which session holds the microphone - here, one named `agent`. It
-folds into a ring when idle. Drag it with the mouse to wherever it bothers you
-least; it remembers the spot, and comes back to the top-right corner on its own
-if that spot is on a monitor you have since unplugged.*
+Ask what time the build finished and he tells you. Say "tell the agent to fix
+the failing test" and the words land in a live Claude Code session that goes
+and does it, then reports back, out loud, while you are still making coffee.
+
+```bash
+git clone https://github.com/spanderok/jarvis ~/.claude/jarvis
+cd ~/.claude/jarvis && bash install.sh     # models, skills, commands - about ten minutes
+# System Settings -> Privacy & Security -> Microphone -> your terminal
+bash jarvisd.sh                            # then say "Jarvis"
+```
+
+That is the whole install; the [step by step](#install) below has the details
+and the things that go wrong.
+
+## Why you would want him
+
+**He is ears and a mouth for the agent you already have.** Jarvis has no brain
+of his own. Type `/assist` in any Claude Code session and that session hears
+you and talks back - with every tool, MCP server and project rule it already
+has. Ask "is the pipeline green" and the agent that can read your CI answers.
+
+**Nothing you say leaves the machine.** Wake word, speech to text, text to
+speech - all local, on Apple silicon. The only thing that goes out is the text
+of your question, to the same `claude` CLI you already use.
+
+**And it costs almost nothing to keep on.** Listening takes about 2 % of one
+core and 120 MB. The big models wake for half a second per phrase -
+[measured](#what-it-costs-your-mac).
+
+**"Tell me out loud when you are done."** Hand an agent a long task, add that
+sentence, walk away. Twenty minutes later a voice tells you how it went. This
+one habit is why people keep him on -
+[more of them](#in-a-working-day).
+
+**He can know your voice - if you want.** Off by default. Six minutes of
+enrolment and he answers you and only you; a colleague leaning into your
+microphone gets a polite refusal.
+
+**One key beats every recognizer.** A spare key means "switch to me": it ends
+your sentence, interrupts him mid-word, or wakes him with no wake word at all.
+
+**You teach him new tricks in a config file, not in Python.** "What's playing"
+running a script, "tell the reviewer" typing into a second session, memory of
+last month's decisions from your own notes - each is a few lines in a settings
+file. English and Russian in the box; a third language is one more text file.
+
+*The badge above (`overlay.sh`) floats over every window and shows what he is
+doing and which session holds the microphone - here, one named `agent`. Drag it
+wherever it bothers you least; it remembers the spot.*
+
+## Contents
+
+- [One exchange, end to end](#one-exchange-end-to-end)
+- [Install](#install) - [before you start](#before-you-start), [four steps](#step-1---get-the-code), [check](#check-that-everything-is-in-place), [if something is off](#if-something-is-off), [Russian](#russian), [updating](#updating), [uninstall](#uninstall)
+- [Your agent's ears and mouth](#your-agents-ears-and-mouth)
+- [In a working day](#in-a-working-day)
+- [What it costs your Mac](#what-it-costs-your-mac)
+- [The voice lock - he answers only you](#the-voice-lock---he-answers-only-you)
+- [The key](#the-key)
+- [Rooms and actions](#rooms-and-actions)
+- [Long-term memory](#long-term-memory)
+- [Languages](#languages) - [when he says a word wrong](#when-he-says-a-word-wrong)
+- [What else is in the box](#what-else-is-in-the-box)
+- [Privacy](#privacy), [Disclaimer](#disclaimer), [Feedback](#feedback), [License](#license)
 
 ## One exchange, end to end
 
@@ -214,16 +240,17 @@ sessions you have not started (see [Rooms and actions](#rooms-and-actions)).
 
 ### Make him yours
 
-Everything personal lives in `jarvis.env`, one shell assignment per line.
+Everything personal lives in `jarvis.env`, one shell assignment per line -
+your name, the keys, timings, which model answers, the language.
 `jarvis.env.example` documents every knob with its default; set only what you
-change, then restart the daemon.
+change, then restart the daemon. The code itself ships unchanged.
 
 ```sh
 JARVIS_OWNER=Ada           # empty: he says "the owner of this computer"
 JARVIS_MODEL=sonnet        # the Claude model for voice answers; haiku is fastest
 ```
 
-The key is worth setting next - see the section below.
+The key is worth setting next - see [The key](#the-key).
 
 ### If something is off
 
@@ -314,7 +341,20 @@ give it some - `JARVIS_MCP=1` in `jarvis.env` starts it with your MCP servers,
 at the cost of about two seconds per answer. Anything that needs real tools he
 passes to a [room](#rooms-and-actions).
 
-## Habits worth picking up
+So there are two ways to run him, and one microphone between them:
+
+- **`bash jarvisd.sh`** - the standalone daemon. Fast answers from his own
+  session; heavy work is handed to a room.
+- **`/assist`** in a Claude Code session - that session takes the microphone
+  and becomes Jarvis, with all its tools. `/assist-off` releases it,
+  `/jarvis-daemon` starts the daemon again.
+
+Whoever takes the microphone says who had it before. Any session can still
+speak through the `voice-answer` skill without holding it, and your spoken
+reply always lands with the holder, which forwards it by name to the session
+that asked.
+
+## In a working day
 
 Things that turned out to matter more than any feature, in the order people
 usually discover them.
@@ -579,28 +619,6 @@ jarvis-key.sh double       # two presses
 
 The same thing by hand: `kill -USR1 <pid>` and `kill -USR2 <pid>`.
 
-## Settings
-
-Everything personal lives in `jarvis.env` - your name, the keys, timings, which
-model answers. `jarvis.env.example` documents every knob with its default; copy,
-edit, restart. The code ships unchanged.
-
-## Two ways to run him
-
-**Standalone daemon** - `jarvisd.sh`. His own Claude session answers, and heavy
-work is handed to another window.
-
-**Inside an agent session** - the `/assist` command. The session you are already
-working in takes the microphone and starts hearing you: you ask out loud, the
-agent does the work in that repository and answers out loud. `/assist-off` gives
-the microphone back, `/jarvis-daemon` returns it to the standalone daemon.
-
-There is one microphone, so only one of them can hold it. Both drop in through
-the same file lock, and each tells you who it took it from. Any session can
-still speak through the `voice-answer` skill without holding the microphone;
-your spoken reply always lands with the holder, which forwards it by name to
-the session that asked.
-
 ## Rooms and actions
 
 He answers most questions himself. The rest either go to a **room** - another
@@ -787,6 +805,17 @@ people around your desk that a microphone is on.
 The author accepts no liability for any loss, damage, data leak or legal
 consequence arising from installing, running or modifying this software. If
 that is not acceptable to you, do not use it.
+
+## Feedback
+
+If he earned a place on your desk, a star on the repository is how the next
+person finds him. If he did not, an issue is even more useful - say which Mac
+and which macOS, what you said, and paste the last lines of `bash why.sh`; the
+log holds the reason for every take that went wrong.
+
+Pull requests are welcome for what the README promises and the code does not
+yet do: another language, another voice backend, a room you built that others
+would want.
 
 ## License
 
