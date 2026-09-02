@@ -8,8 +8,9 @@
 
 One exchange, end to end:
   1. Wake engine listens to the mic (16 kHz mono).
-     - vosk (default): offline Russian ASR, 87 MB model, triggers on the real
-       name itself. Free, no registration, no network.
+     - vosk (default): a small offline recognizer for the locale's language
+       (40-50 MB), triggers on the real name itself. Free, no registration,
+       no network.
      - oww: openWakeWord "hey jarvis", English pronunciation only.
      - porcupine: Picovoice, needs an access key; supports a custom .ppn.
   2. Chime, then record until SILENCE_SEC of quiet - or until the hotkey is
@@ -39,7 +40,7 @@ Keys (need macOS Input Monitoring permission for the terminal you start from):
 
 Env:
   JARVIS_WAKE_ENGINE     "vosk" (default) | "oww" | "porcupine"
-  JARVIS_VOSK_MODEL      Vosk model dir (default: models/vosk-model-small-ru-0.22)
+  JARVIS_VOSK_MODEL      Vosk model dir (default: models/<wake_model of the locale>)
   JARVIS_TAP_KEYS        tap keys, default "<f18>" (M5 is remapped to it by keymap.sh):
                          one press = answer now, two = interrupt / wake
   JARVIS_DONE_KEYS       "answer now" only, and only while listening, default <alt_r>;
@@ -1936,8 +1937,11 @@ class Speaker:
     """
 
     EDGE_WORKER = os.path.join(JARVIS_DIR, "tts_worker.py")
+    PIPER_WORKER = os.path.join(JARVIS_DIR, "piper_worker.py")
     VOSK_WORKER = os.path.join(JARVIS_DIR, "vosk_worker.py")
     VOSK_PY = os.path.join(JARVIS_DIR, "venv-vosk", "bin", "python")
+    PIPER_DIR = os.environ.get("JARVIS_PIPER_DIR",
+                               os.path.join(JARVIS_DIR, "models", "piper"))
 
     def __init__(self, trigger: Trigger):
         self.trigger = trigger
@@ -1953,19 +1957,38 @@ class Speaker:
     # --- worker plumbing ----------------------------------------------------
 
     def _worker_command(self) -> list[str]:
-        """Local voice by default; JARVIS_BACKEND=edge brings back the network one."""
-        backend = os.environ.get("JARVIS_BACKEND", "vosk")
-        if backend == "vosk" and os.access(self.VOSK_PY, os.X_OK):
-            return [self.VOSK_PY, self.VOSK_WORKER]
+        """The locale picks the voice: piper for English, vosk for Russian.
+
+        JARVIS_BACKEND overrides it for one run (lang.py applies that). When the
+        local voice is not installed the network one (edge-tts) speaks instead,
+        so a missing model costs the offline-ness, never the answer.
+        """
+        backend = LANG.tts_backend or "edge"
+        if backend == "piper":
+            voice = os.path.join(self.PIPER_DIR, f"{LANG.tts_voice}.onnx")
+            if os.path.isfile(voice):
+                return ["uv", "run", "--quiet", self.PIPER_WORKER]
+            log(f"piper voice not found at {voice} - using the network voice; "
+                f"run install.sh models to fetch it")
+        elif backend == "vosk":
+            if os.access(self.VOSK_PY, os.X_OK):
+                return [self.VOSK_PY, self.VOSK_WORKER]
+            log(f"vosk voice not installed ({self.VOSK_PY} missing) - using the "
+                f"network voice; run install.sh models to set it up")
         return ["uv", "run", "--quiet", self.EDGE_WORKER]
 
     def _start_worker(self) -> None:
+        # the network worker reads its voice from the environment; the locale
+        # supplies it unless the owner set one by hand
+        env = dict(os.environ)
+        env.setdefault("JARVIS_EDGE_VOICE", LANG.edge_voice)
+        env.setdefault("JARVIS_SYSTEM_VOICE", LANG.system_voice)
         try:
             self.proc = subprocess.Popen(
                 self._worker_command(),
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL, text=True, bufsize=1,
-                start_new_session=True)
+                start_new_session=True, env=env)
         except OSError as e:
             log(f"tts worker failed to start: {e}")
             self.proc = None
@@ -2020,7 +2043,7 @@ class Speaker:
         if not self._send(text):
             log("tts worker unavailable, falling back to the system voice")
             self._done_one()
-            spawn(["say", "-v", "Yuri", text],
+            spawn(["say", "-v", LANG.system_voice or "Daniel", text],
                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def wait(self) -> None:

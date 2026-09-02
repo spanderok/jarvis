@@ -20,7 +20,7 @@
 # actions draw - a fixed route cannot be talked into reading something else.
 #
 # See memory.d/*.example.* for working starting points, and check your own with
-#     python3 memory.py "a question you would ask"
+#     uv run memory.py "a question you would ask"
 
 [memory]
 enabled = false

@@ -18,15 +18,15 @@ ROOM="$1"
 shift 2>/dev/null
 
 if [ -z "$ROOM" ]; then
-  echo "usage: room.sh <room-id>   (known: $(python3 "$JARVIS_DIR/plugins.py" rooms))" >&2
+  echo "usage: room.sh <room-id>   (known: $(uv run --quiet "$JARVIS_DIR/plugins.py" rooms))" >&2
   exit 2
 fi
 
-field() { python3 "$JARVIS_DIR/plugins.py" get "$ROOM" "$1" 2>/dev/null; }
+field() { uv run --quiet "$JARVIS_DIR/plugins.py" get "$ROOM" "$1" 2>/dev/null; }
 
 NAME="$(field session)"
-if [ -z "$NAME" ] && ! python3 "$JARVIS_DIR/plugins.py" get "$ROOM" id >/dev/null; then
-  echo "room.sh: no room called '$ROOM' - known: $(python3 "$JARVIS_DIR/plugins.py" rooms)" >&2
+if [ -z "$NAME" ] && ! uv run --quiet "$JARVIS_DIR/plugins.py" get "$ROOM" id >/dev/null; then
+  echo "room.sh: no room called '$ROOM' - known: $(uv run --quiet "$JARVIS_DIR/plugins.py" rooms)" >&2
   exit 2
 fi
 DIR="$(field work_dir)"

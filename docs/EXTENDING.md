@@ -184,7 +184,7 @@ that is down, slow or shouting on stderr costs you the context, never the
 answer.
 
 ```bash
-python3 memory.py "a question you would ask"   # what comes back, and how fast
+uv run memory.py "a question you would ask"   # what comes back, and how fast
 ```
 
 ## Another language
@@ -201,16 +201,16 @@ complete Russian presets: copy them without the `.example`, and only the wording
 changes - the launcher, the tint and the commands stay as they were.
 
 ```bash
-python3 lang.py                    # what loaded, and the prompt it builds
-python3 lang.py list               # the languages present
+uv run lang.py                    # what loaded, and the prompt it builds
+uv run lang.py list               # the languages present
 ```
 
 ## Checking your work
 
 ```bash
-python3 plugins.py                    # what loaded, and the routing examples
-python3 plugins.py rooms              # the ids, in order
-python3 plugins.py get chief session  # one field, the way room.sh reads it
+uv run plugins.py                    # what loaded, and the routing examples
+uv run plugins.py rooms              # the ids, in order
+uv run plugins.py get chief session  # one field, the way room.sh reads it
 uv run --with pytest pytest tests/ -q # the whole suite, config included
 uv run jarvis_daemon.py --selfcheck   # plus which windows are actually up
 ```

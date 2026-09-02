@@ -63,3 +63,8 @@ session/*
 
 # pytest
 .pytest_cache/
+
+# piper phrase cache, Telegram poll lock and offset
+cache-piper/
+tg.lock
+tg_offset

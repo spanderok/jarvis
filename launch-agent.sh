@@ -14,9 +14,12 @@
 # Full paths everywhere: Shortcuts does not run a login shell.
 
 JARVIS_DIR="$HOME/.claude/jarvis"
+# uv reads the room config below; Shortcuts starts us without a login shell,
+# so the usual install locations are put on PATH by hand.
+export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 # Which rooms exist, and what each is called, comes out of config/rooms.toml.
-ROOMS="$(python3 "$JARVIS_DIR/plugins.py" rooms 2>/dev/null)"
-room_field() { python3 "$JARVIS_DIR/plugins.py" get "$1" "$2" 2>/dev/null; }
+ROOMS="$(uv run --quiet "$JARVIS_DIR/plugins.py" rooms 2>/dev/null)"
+room_field() { uv run --quiet "$JARVIS_DIR/plugins.py" get "$1" "$2" 2>/dev/null; }
 UV=$(command -v uv || echo /opt/homebrew/bin/uv)
 
 # --- window handling --------------------------------------------------------

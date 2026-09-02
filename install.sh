@@ -16,7 +16,9 @@ STEP="${1:-all}"
 # Which models to fetch is the locale's business. Read once, before anything
 # needs it, so a typo in JARVIS_LANG stops the installer rather than half of it.
 LANG_FILE=""
-lang_field() { python3 "$REPO/lang.py" get "$1" 2>/dev/null; }
+# Through uv, not python3: the system python on a fresh Mac is 3.9 and cannot
+# read TOML. uv brings a 3.12 of its own on the first call (one-time download).
+lang_field() { uv run --quiet "$REPO/lang.py" get "$1" 2>/dev/null; }
 
 # CAM++ speaker embeddings, exported to ONNX. Language-independent - it compares
 # voices, not words - so it lives here rather than in a locale.
@@ -45,10 +47,11 @@ if [ -f "$REPO/jarvis.env" ]; then
 fi
 JARVIS_LANG="${JARVIS_LANG:-en}"
 export JARVIS_LANG
-if ! LANG_FILE=$(python3 "$REPO/lang.py" get name 2>&1); then
+echo "checking the language files (the first run installs a python for uv, a minute or so)"
+if ! LANG_FILE=$(uv run --quiet "$REPO/lang.py" get name 2>&1); then
   echo "$LANG_FILE" >&2
   echo "JARVIS_LANG=$JARVIS_LANG has no locale file. Available:" >&2
-  python3 "$REPO/lang.py" list >&2
+  uv run --quiet "$REPO/lang.py" list >&2
   exit 1
 fi
 echo "language: $JARVIS_LANG (wake word: $LANG_FILE)"
@@ -167,13 +170,25 @@ if [ "$STEP" = all ] || [ "$STEP" = models ]; then
       echo "         $MODELS/vosk-0.7 by hand." >&2
     fi
   fi
+  # vosk-tts lives in a virtualenv of its own rather than a PEP 723 header:
+  # the voice worker, the one-shot speaker and the dictionary builder all share
+  # one interpreter, and the daemon finds it at venv-vosk/bin/python.
+  VOSK_PY="$REPO/venv-vosk/bin/python"
+  if [ -x "$VOSK_PY" ] && "$VOSK_PY" -c 'import vosk_tts' 2>/dev/null; then
+    echo "voice runtime: venv-vosk is ready"
+  else
+    echo "voice runtime: creating venv-vosk and installing vosk-tts (a minute or two)"
+    uv venv --quiet --python 3.12 "$REPO/venv-vosk" \
+      && uv pip install --quiet --python "$VOSK_PY" vosk-tts \
+      || echo "warning: venv-vosk did not come up - he will speak with the network voice" >&2
+  fi
   # The 2M-word stress table is shipped as text; sqlite is what keeps the voice
   # at 359 MB of RAM instead of 966 MB.
   if [ -f "$MODELS/vosk-0.7/dict.sqlite" ]; then
     echo "stress dictionary: already built"
-  elif [ -s "$MODELS/vosk-0.7/dictionary" ]; then
+  elif [ -s "$MODELS/vosk-0.7/dictionary" ] && [ -x "$VOSK_PY" ]; then
     echo "stress dictionary: building (a minute or two)"
-    uv run --quiet "$REPO/vosk_dict.py" build "$MODELS/vosk-0.7/dictionary"
+    "$VOSK_PY" "$REPO/vosk_dict.py" build "$MODELS/vosk-0.7/dictionary"
   else
     echo "warning: no dictionary file in $MODELS/vosk-0.7 - the voice will read" >&2
     echo "         unknown words with default stress." >&2
