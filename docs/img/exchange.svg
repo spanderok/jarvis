@@ -52,7 +52,7 @@
   <rect x="584" y="80" width="112" height="64" rx="8" class="box"/>
   <text x="640" y="102" class="label" text-anchor="middle">speech to text</text>
   <text x="640" y="119" class="small" text-anchor="middle">parakeet-mlx</text>
-  <text x="640" y="135" class="muted" text-anchor="middle">600 MB</text>
+  <text x="640" y="135" class="muted" text-anchor="middle">2.3 GB</text>
 
   <!-- the question, down to claude -->
   <path d="M640,144 L640,190 L600,190 L600,230" class="edge" marker-end="url(#arrow)"/>
