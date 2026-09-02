@@ -80,7 +80,17 @@ One phrase end to end, from the request to the sound:
 
 No network is needed for either the voice or the voice message. If the local model is not in place, the script goes to the network for a Microsoft neural voice (`VOICE_ENGINE=edge` forces that), and with no network at all it falls back to the system voice.
 
-Fixing how a word is pronounced is a one-time thing. For the Russian voice: `~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py тЕстовый` - the capital letter marks the stressed vowel.
+## When the owner says a word was stressed wrong
+
+The Russian voice reads by a stress dictionary with a personal override table on top. When the owner says something like "you said творог wrong, it is творОг" - typed or out loud - do this at once, no questions:
+
+```bash
+~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py творОг
+```
+
+The capital letter marks the stressed vowel; several words can go in one call. Then say the word back in a short sentence through `speak.sh`, so they hear the fix. If they did not say where the stress goes, ask in text, never guess - a wrong override is worse than the original mistake. `vosk_dict.py list` shows what has been fixed so far.
+
+The English voice (piper) has no override table. If a name is read badly, spell it in the spoken text the way it sounds.
 
 ## The answer will not come back to you
 

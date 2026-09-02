@@ -6,9 +6,6 @@ tells you. Say "tell the chief to fix the failing test" and the words land in a
 live Claude Code session that goes and does it, then reports back, out loud,
 while you are still making coffee.
 
-Not a demo. This is the assistant one developer has talked to every working day
-since August 2026, packed up so you can have him too.
-
 **He is ears and a mouth for the agent you already have.** Jarvis has no brain
 of his own: he runs on Claude Code. Type `/assist` in any session and that
 session hears you and talks back - with every tool, every MCP server and every
@@ -35,9 +32,12 @@ microphone gets a polite "sorry, I only talk to the owner of this computer".
 to me": it ends your sentence, interrupts him mid-word, or wakes him with no
 wake word at all.
 
-**It grows without a fork.** New places to send a phrase and new commands to
-run are rows in two TOML files. Long-term memory is any vector store you can
-call from a shell script. Two languages ship; a third is one more file.
+**You teach him new tricks in a config file, not in Python.** Want "what's
+playing" to run a script and read its output? Want "tell the reviewer" to type
+the rest of the sentence into a second Claude session? Each is a few lines in a
+settings file. Want him to remember last month's decisions? Point him at your
+notes with a one-line script. English and Russian come in the box; another
+language is one more text file with the phrases translated.
 
 Free models, no accounts, about 2.6 GB of disk, MIT. Below: how one exchange
 works, how to install him in fifteen minutes, and everything else.
@@ -694,6 +694,37 @@ Adding a third language is copying `locales/en.toml`. The routing vocabulary is
 separate, because it belongs to your rooms rather than to the language -
 `rooms.d/ru.example.toml` is a complete Russian preset showing how far a drop-in
 goes.
+
+### When he says a word wrong
+
+**Russian.** The vosk voice reads by a stress dictionary of two million words,
+and a personal override table sits on top of it and always wins. To fix a
+word, write it with the stressed vowel in capitals:
+
+```bash
+~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py творОг
+~/.claude/jarvis/venv-vosk/bin/python ~/.claude/jarvis/vosk_dict.py list   # what you have fixed so far
+```
+
+It takes effect on the next phrase, and it survives updates - the table lives
+in `models/`, which git never touches.
+
+The easier way is to tell the agent. Any session with the `voice-answer` skill
+knows this command, so this is enough, typed or said out loud:
+
+```
+Jarvis just said "творог" with the stress on the first syllable. It is творОг - fix it.
+```
+
+The agent runs the command above and says the word again so you can hear it.
+
+**English.** piper reads by rule and has no override table, so a name it
+mangles is best written the way it sounds in the text that is spoken:
+"Kubernetes" is fine, "kube-ctl" reads better than "kubectl". The
+`voice-answer` skill already tells agents to say numbers and ticket ids as
+words for the same reason. Text read off another session's screen goes through
+the `spoken_swaps` table in the locale file first, which is where symbols a
+voice reads badly - `->`, `..`, `#` - are replaced.
 
 ## What else is in the box
 
