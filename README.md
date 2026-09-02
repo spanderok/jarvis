@@ -1,15 +1,40 @@
 # Jarvis
 
-A voice assistant for macOS that answers with Claude Code. You say "Jarvis", ask
-a question out loud, and he answers out loud - or hands the work over to a Claude
-session that can actually do it.
+Say "Jarvis" anywhere in the room, and your Mac answers out loud - in a calm
+British voice, with Claude behind it. Ask what time the build finished and he
+tells you. Say "tell the chief to fix the failing test" and the words land in a
+live Claude Code session that goes and does it, then reports back, out loud,
+while you are still making coffee.
 
-Speech in and speech out are local: no cloud speech service, no audio leaving the
-machine. The answer comes from the `claude` CLI you already have.
+Not a demo. This is the assistant one developer has talked to every working day
+since August 2026, packed up so you can have him too.
 
-English out of the box, Russian in the box next to it. Everything he says or
-listens for is a config file, so a third language is one more file - see
-[Languages](#languages).
+**Nothing you say leaves the machine.** Hearing the wake word, turning speech
+into text, turning the answer into a voice - all of it runs locally on Apple
+silicon, no cloud speech service, no audio uploaded anywhere. The only thing
+that goes out is the text of your question, to the same `claude` CLI you
+already use.
+
+**He knows your voice.** Six minutes of enrolment and he answers you and only
+you. A colleague leaning into your microphone gets a polite "sorry, I only talk
+to the owner of this computer". Do not want that? Skip it - it is off until you
+turn it on.
+
+**He is not a toy on the side of your work - he is inside it.** Type `/assist`
+in any Claude Code session and that session takes the microphone: you talk, the
+agent works in your repository and speaks the result. Any agent can report out
+loud, or send you a voice message on Telegram when you have left the desk.
+
+**One key beats every recognizer.** A spare key on your keyboard means "switch
+to me": it ends your sentence, interrupts him mid-word, or wakes him with no
+wake word at all.
+
+**It grows without a fork.** New places to send a phrase and new commands to
+run are rows in two TOML files. Long-term memory is any vector store you can
+call from a shell script. Two languages ship; a third is one more file.
+
+Free models, no accounts, about 800 MB of disk, MIT. Below: how one exchange
+works, how to install him in fifteen minutes, and everything else.
 
 ## One exchange, end to end
 
@@ -240,6 +265,139 @@ rm -rf ~/.claude/jarvis ~/.claude/tts-cache
 Then remove the terminal app from Microphone and Input Monitoring in System
 Settings if you no longer want it there. The Python environments live in
 `~/.cache/uv` and go away with `uv cache clean`.
+
+## The voice lock - he answers only you
+
+A microphone hears everyone in the room. The voice lock is how he tells your
+voice from a colleague's, a visitor's, or his own coming back through the
+speakers - and it is **off until you record a profile**. Without one he answers
+whoever speaks, and nothing else changes.
+
+### How it decides
+
+It compares voices, not words, so the phrase does not matter.
+
+1. The recorded phrase goes through `campplus.onnx`, a small speaker model,
+   which folds it into one vector of 512 numbers - the voice print of whoever
+   just spoke.
+2. That print is compared with two crowds: every take you recorded at
+   enrolment, and a cohort of voices that are not you - his own synthesised
+   speech and two macOS system voices, which he gathers from disk himself.
+3. Two numbers come out, "how much this looks like you" and "how much it looks
+   like somebody else", and you have to win by a margin. The margin is
+   measured at enrolment, not guessed.
+
+Why two numbers and not one threshold, measured on a real profile: his own
+synthesised voice, coming back through the speakers, scored 0.65 against the
+owner's takes - higher than the owner's own tired take at 0.57. No single line
+separates those. But the same synthesised clip scores 0.95 against other clips
+of itself, so "looks like you minus looks like the cohort" lands at -0.31 for
+it and at +0.10 or better for every take of the owner's. The tired voice gets
+through; the speakers do not.
+
+Everything **fails open**. No model, no profile, a broken file, a phrase under
+one second - he lets it through. A lock that silences him because a file went
+missing would be worse than no lock.
+
+Three cases skip the check on purpose, because there is better evidence than a
+voice:
+
+- a take you started or ended with the key - that is your own hand on the
+  keyboard;
+- a take with music still playing in it - the print is then you and a song at
+  once, and matches nobody;
+- the follow-up window after his answer still checks, but refuses silently -
+  nobody asked for that take.
+
+### Recording your profile
+
+Stop the daemon first (`Ctrl+C`, or `/assist-off`) - the script warns if he is
+still listening, because he would hear the enrolment as questions. Then:
+
+```bash
+uv run ~/.claude/jarvis/enroll_voice.py
+```
+
+It records six takes of six seconds each. Before each one it prints how to
+speak and what to say - the phrases come from your locale, so they are real
+commands in your language, not test sentences:
+
+```
+[normal] Your ordinary voice, sitting at the Mac as usual.
+    phrase: "Jarvis, what is on the list for today, have a look please"
+    Enter, then talk:
+    recorded, level 812
+    keep it? [Y/n]
+[close] Closer to the microphone, a little quieter than usual.
+...
+[far] Step two or three metres away and speak up.
+[noise] Put music or a fan on and talk over it.
+[tired] Quiet, tired, a little hoarse - the way you sound late at night.
+[fast] Fast and careless, swallowing the ends of words.
+```
+
+Several takes rather than one average, because a microphone hears a tired
+voice at arm's length differently from a fresh one leaning in; a single
+average sits between the two and matches neither. Each take is kept whole, and
+a phrase is yours if it matches any one of them.
+
+At the end it works out where the line goes, prints the numbers, and says
+either `Room between you and the cohort: ... - that is enough` or
+`!! The gap is small` - the latter means one take sounded forced, re-record
+that one with `--add <name>`. For scale, `--report` on a real profile after a
+few weeks of use, thirteen takes against fifty-six other voices:
+
+```
+takes: 13 - normal, close, far, noise, tired, fast, fresh, aircon, ...
+cohort voices: 56
+recognition floor: 0.45, margin line: -0.14
+worst own take: 0.65, its smallest gap: +0.11, cohort's best gap: -0.31 (jarvis-tts)
+```
+
+The profile is `voiceprint.json`. It is biometric data and is in `.gitignore`
+along with the recordings; it never leaves the machine.
+
+Restart the daemon. From now on a stranger hears the refusal line once, and for
+the next sixty seconds further strangers are dropped without a word, so a
+conversation next to your desk does not get a running commentary.
+
+### Living with it
+
+```bash
+uv run enroll_voice.py --check          # say something, see the score and the verdict
+uv run enroll_voice.py --report         # what the profile holds
+uv run enroll_voice.py --forgive        # replay what he refused, add the ones that were you
+uv run enroll_voice.py --add whisper    # one more condition, any name you like
+uv run enroll_voice.py --rebuild        # redo the maths, keep the takes
+```
+
+`--forgive` is the one you will use. Every refused phrase is saved in
+`rejected/`; it plays them back one at a time and asks "was that you?". A yes
+adds the take to the profile and moves the line.
+
+Changed the microphone, or the room? Either re-record, or switch the check off
+until you do:
+
+```sh
+JARVIS_SPK=off                          # in jarvis.env: never check who is talking
+JARVIS_STRANGER_LINE="Not for you."     # what he says to someone who is not you
+```
+
+Voice messages from Telegram go through the same check, so a stranger with
+your phone gets the same refusal.
+
+### Living without it
+
+Do nothing - that is the default. Two ways to make the choice explicit:
+
+- `JARVIS_NO_SPEAKER=1 bash install.sh` skips the 28 MB model download, and
+  the check has nothing to run on;
+- `JARVIS_SPK=off` in `jarvis.env` keeps the model and the profile but never
+  consults them.
+
+Without the lock the key is still your protection: a stranger can ask him
+questions, but handing work to another agent needs the key by default, and he
+says so out loud if someone tries by voice alone.
 
 ## The key
 
