@@ -23,7 +23,9 @@ import sys
 
 import edge_tts
 
-VOICE = os.environ.get("JARVIS_EDGE_VOICE", "ru-RU-the ownerNeural")
+# The daemon passes the locale's voice in JARVIS_EDGE_VOICE; started by hand
+# with nothing set, a neutral English voice is better than a wrong one.
+VOICE = os.environ.get("JARVIS_EDGE_VOICE") or "en-GB-RyanNeural"
 RATE = os.environ.get("JARVIS_EDGE_RATE", "+5%")
 PITCH = os.environ.get("JARVIS_EDGE_PITCH", "+0Hz")
 VOLUME = os.environ.get("JARVIS_EDGE_VOLUME", "+0%")

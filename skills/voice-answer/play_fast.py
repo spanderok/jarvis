@@ -22,8 +22,11 @@ import edge_tts
 
 STARTED = time.monotonic()
 
-VOICE = os.environ.get("VOICE", "ru-RU-the ownerNeural")
+VOICE = (os.environ.get("VOICE") or os.environ.get("JARVIS_EDGE_VOICE")
+         or "en-GB-RyanNeural")
 RATE = os.environ.get("RATE", "+5%")
+# The last resort when the network voice drops a piece: the locale's macOS voice.
+SYSTEM_VOICE = os.environ.get("JARVIS_SYSTEM_VOICE") or "Daniel"
 CACHE = pathlib.Path(os.path.expanduser("~/.claude/tts-cache"))
 # The first piece only has to buy time: one short word is enough, and the shorter
 # it is the sooner the voice starts. The rest is spoken in natural-sized pieces.
@@ -168,7 +171,7 @@ async def main() -> int:
         tail = " ".join(missed)
         print(f"reading the rest with the system voice: {tail[:60]!r}", file=sys.stderr)
         proc = await asyncio.create_subprocess_exec(
-            "say", "-v", "Yuri", tail,
+            "say", "-v", SYSTEM_VOICE, tail,
             stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
         await proc.wait()
     # A non-zero exit tells the caller to say the whole thing with the system

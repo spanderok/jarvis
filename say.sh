@@ -22,10 +22,10 @@ JARVIS_HOME="$HOME/.claude/jarvis"
 
 # One python call for all four, rather than four - this runs on every phrase.
 read -r BACKEND VOICE EDGE_VOICE SYSTEM_VOICE <<EOF
-$(python3 "$JARVIS_HOME/lang.py" get tts_backend 2>/dev/null) \
-$(python3 "$JARVIS_HOME/lang.py" get tts_voice 2>/dev/null) \
-$(python3 "$JARVIS_HOME/lang.py" get edge_voice 2>/dev/null) \
-$(python3 "$JARVIS_HOME/lang.py" get system_voice 2>/dev/null)
+$(uv run --quiet "$JARVIS_HOME/lang.py" get tts_backend 2>/dev/null) \
+$(uv run --quiet "$JARVIS_HOME/lang.py" get tts_voice 2>/dev/null) \
+$(uv run --quiet "$JARVIS_HOME/lang.py" get edge_voice 2>/dev/null) \
+$(uv run --quiet "$JARVIS_HOME/lang.py" get system_voice 2>/dev/null)
 EOF
 
 # If the locale would not load, still say something rather than nothing.
