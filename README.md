@@ -760,6 +760,24 @@ from a file in the repo.
 The voice lock is off unless you enable it, and it fails open by design: a
 missing model or a broken profile lets everyone through rather than silencing him.
 
+## Disclaimer
+
+This is a personal project, shared as is, with no warranty of any kind. Jarvis
+listens to a microphone and hands what he hears to a Claude Code session that
+can run commands, edit files and reach whatever services that session is
+connected to. **You are the one who decides what that session may do**, through
+its permission settings, its rules and the rooms and actions you configure -
+and you are responsible for the consequences of every command it runs, every
+message it sends and every recording it keeps.
+
+Recording other people's voices is regulated in many places. Check what the law
+where you live requires before enrolling anyone but yourself, and tell the
+people around your desk that a microphone is on.
+
+The author accepts no liability for any loss, damage, data leak or legal
+consequence arising from installing, running or modifying this software. If
+that is not acceptable to you, do not use it.
+
 ## License
 
 MIT.
