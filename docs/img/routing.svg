@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 460" width="960" height="460" role="img" aria-label="Where a heard phrase goes, in the order the routes are tried: an order to a room, an action pattern, a mention word, and otherwise Jarvis answers it himself. One example phrase per route.">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c9ced6"/>
+    </marker>
+  </defs>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: #e8eaed; }
+    .muted { fill: #9aa0a6; font-size: 12px; }
+    .label { font-size: 14px; font-weight: 600; }
+    .small { font-size: 12px; }
+    .box { fill: #1e2128; stroke: #3a3f4a; stroke-width: 1.5; }
+    .edge { stroke: #c9ced6; stroke-width: 1.5; fill: none; }
+    .blue-t { fill: #6cb6ff; }
+    .green-t { fill: #5fd68a; }
+    .amber-t { fill: #f0b35a; }
+    .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px; }
+    .num { font-size: 13px; font-weight: 700; fill: #14161b; }
+  </style>
+
+  <rect x="0" y="0" width="960" height="460" rx="14" fill="#14161b"/>
+
+  <!-- the heard phrase -->
+  <rect x="30" y="26" width="900" height="48" rx="10" class="box"/>
+  <text x="48" y="56" class="label">a phrase he heard</text>
+  <text x="200" y="56" class="muted">normalised: lower case, letters and spaces only - then tried against the routes below, top to bottom, first match wins</text>
+
+  <!-- column headers -->
+  <text x="48" y="104" class="muted">route</text>
+  <text x="300" y="104" class="muted">an example that takes it</text>
+  <text x="640" y="104" class="muted">what happens</text>
+
+  <!-- row 1: order -->
+  <circle cx="48" cy="140" r="11" fill="#6cb6ff"/><text x="48" y="145" class="num" text-anchor="middle">1</text>
+  <text x="70" y="136" class="label">an order to a room</text>
+  <text x="70" y="154" class="muted">"tell &lt;room&gt; ..." / "ask &lt;room&gt; ..."</text>
+  <text x="300" y="145" class="mono">"tell the chief to fix the failing test"</text>
+  <line x1="604" y1="140" x2="630" y2="140" class="edge" marker-end="url(#arrow)"/>
+  <rect x="634" y="118" width="296" height="48" rx="8" class="box" stroke="#6cb6ff"/>
+  <text x="648" y="137" class="small blue-t">room "chief" - a Claude session in Terminal</text>
+  <text x="648" y="155" class="muted">typed into its window; "Passed it to the chief."</text>
+
+  <!-- row 2: action -->
+  <circle cx="48" cy="210" r="11" fill="#5fd68a"/><text x="48" y="215" class="num" text-anchor="middle">2</text>
+  <text x="70" y="206" class="label">an action pattern</text>
+  <text x="70" y="224" class="muted">a regex in config/actions.toml</text>
+  <text x="300" y="215" class="mono">"turn it up a bit"</text>
+  <line x1="600" y1="210" x2="630" y2="210" class="edge" marker-end="url(#arrow)"/>
+  <rect x="634" y="188" width="296" height="48" rx="8" class="box" stroke="#5fd68a"/>
+  <text x="648" y="207" class="small green-t">runs skills/spotify/spotify.sh vol +10</text>
+  <text x="648" y="225" class="muted">a fixed command; its output is spoken aloud</text>
+
+  <!-- row 3: mention -->
+  <circle cx="48" cy="280" r="11" fill="#6cb6ff"/><text x="48" y="285" class="num" text-anchor="middle">3</text>
+  <text x="70" y="276" class="label">a mention word</text>
+  <text x="70" y="294" class="muted">a room's mention_patterns, e.g. \bslack\b</text>
+  <text x="300" y="285" class="mono">"anything new in slack"</text>
+  <line x1="600" y1="280" x2="630" y2="280" class="edge" marker-end="url(#arrow)"/>
+  <rect x="634" y="258" width="296" height="48" rx="8" class="box" stroke="#6cb6ff"/>
+  <text x="648" y="277" class="small blue-t">room "chat" - off until you point it somewhere</text>
+  <text x="648" y="295" class="muted">name the product, never the topic</text>
+
+  <!-- row 4: himself -->
+  <circle cx="48" cy="350" r="11" fill="#f0b35a"/><text x="48" y="355" class="num" text-anchor="middle">4</text>
+  <text x="70" y="346" class="label">nothing matched</text>
+  <text x="70" y="364" class="muted">the ordinary case</text>
+  <text x="300" y="355" class="mono">"what time did the build finish"</text>
+  <line x1="600" y1="350" x2="630" y2="350" class="edge" marker-end="url(#arrow)"/>
+  <rect x="634" y="328" width="296" height="48" rx="8" class="box" stroke="#f0b35a"/>
+  <text x="648" y="347" class="small amber-t">Jarvis answers it himself - claude -p</text>
+  <text x="648" y="365" class="muted">one to three spoken sentences, no markup</text>
+
+  <!-- footer -->
+  <text x="48" y="412" class="muted">Rooms and actions are rows in TOML files: config/rooms.toml and config/actions.toml ship the defaults, your own go in rooms.d/ and actions.d/.</text>
+  <text x="48" y="432" class="muted">Handing work to a room needs the key by default - a room can be a session that posts messages other people read.</text>
+</svg>
