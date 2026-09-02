@@ -9,21 +9,27 @@ while you are still making coffee.
 Not a demo. This is the assistant one developer has talked to every working day
 since August 2026, packed up so you can have him too.
 
+**He is ears and a mouth for the agent you already have.** Jarvis has no brain
+of his own: he runs on Claude Code. Type `/assist` in any session and that
+session hears you and talks back - with every tool, every MCP server and every
+project rule that session already has. Ask "is the pipeline green" and the
+agent that can read your CI answers; say "tell me out loud when the tests are
+done" and it does, while you are in another window or another room.
+
 **Nothing you say leaves the machine.** Hearing the wake word, turning speech
 into text, turning the answer into a voice - all of it runs locally on Apple
 silicon, no cloud speech service, no audio uploaded anywhere. The only thing
 that goes out is the text of your question, to the same `claude` CLI you
 already use.
 
-**He knows your voice.** Six minutes of enrolment and he answers you and only
-you. A colleague leaning into your microphone gets a polite "sorry, I only talk
-to the owner of this computer". Do not want that? Skip it - it is off until you
-turn it on.
+**And it costs almost nothing to keep on.** Listening for the wake word takes
+about 2 % of one core and 120 MB; the badge another 40 MB. The big models
+wake up for a fraction of a second per phrase and go back to sleep -
+[measured numbers below](#what-it-costs-your-mac).
 
-**He is not a toy on the side of your work - he is inside it.** Type `/assist`
-in any Claude Code session and that session takes the microphone: you talk, the
-agent works in your repository and speaks the result. Any agent can report out
-loud, or send you a voice message on Telegram when you have left the desk.
+**He can know your voice - if you want.** Off by default. Six minutes of
+enrolment and he answers you and only you; a colleague leaning into your
+microphone gets a polite "sorry, I only talk to the owner of this computer".
 
 **One key beats every recognizer.** A spare key on your keyboard means "switch
 to me": it ends your sentence, interrupts him mid-word, or wakes him with no
@@ -33,13 +39,8 @@ wake word at all.
 run are rows in two TOML files. Long-term memory is any vector store you can
 call from a shell script. Two languages ship; a third is one more file.
 
-Free models, no accounts, about 800 MB of disk, MIT. Below: how one exchange
+Free models, no accounts, about 2.6 GB of disk, MIT. Below: how one exchange
 works, how to install him in fifteen minutes, and everything else.
-
-![The daemon's log: it comes up, hears the wake word, transcribes "what time did the build finish", Claude answers in under two seconds, and the next phrase is typed into a live agent's window](docs/img/terminal.svg)
-
-*What the daemon prints while this happens. Log lines are the real format;
-the timings are typical for an M-series Mac.*
 
 | asleep | listening | thinking | speaking |
 |---|---|---|---|
@@ -47,7 +48,9 @@ the timings are typical for an M-series Mac.*
 
 *The badge (`overlay.sh`) floats above every window and tells you what he is
 doing and which session holds the microphone - here, one named `agent`. It
-folds into a ring when idle and can be dragged anywhere.*
+folds into a ring when idle. Drag it with the mouse to wherever it bothers you
+least; it remembers the spot, and comes back to the top-right corner on its own
+if that spot is on a monitor you have since unplugged.*
 
 ## One exchange, end to end
 
@@ -99,8 +102,9 @@ Two more things are optional:
   the packages on the first run. The Python that ships with macOS (3.9) is never
   used.
 
-Expect about 800 MB of disk for the models, and an internet connection for the
-one-time downloads.
+Expect about 2.6 GB of disk for the models - 2.3 GB of that is the transcriber,
+fetched on the first question - and an internet connection for the one-time
+downloads.
 
 ### Step 1 - get the code
 
@@ -146,12 +150,12 @@ starts with `warning:` is not fatal - read it, it says what will be missing.
 | `vosk-model-small-en-us-0.15` | hearing the wake word | 41 MB | [alphacephei.com](https://alphacephei.com/vosk/models) |
 | `en_GB-alan-medium` | his voice (piper) | 63 MB | [piper-voices](https://huggingface.co/rhasspy/piper-voices) |
 | `campplus.onnx` | telling your voice from a stranger's | 28 MB | [CAM++ ONNX](https://huggingface.co/FunAudioLLM/CosyVoice-300M) |
-| `parakeet-tdt-0.6b-v3` | transcribing the question | 600 MB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3) - **on the first question**, not by the installer |
+| `parakeet-tdt-0.6b-v3` | transcribing the question | 2.3 GB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3) - **on the first question**, not by the installer |
 
 Nothing is bundled and `models/` is in `.gitignore`. All of them are free and
-need no account. The speaker model is the only optional one: skip it with
-`JARVIS_NO_SPEAKER=1 bash install.sh` and the voice lock stays off, which is the
-default anyway until you record a profile.
+need no account. The speaker model is downloaded but **not used** until you
+record a voice profile - see [The voice lock](#the-voice-lock---he-answers-only-you).
+Skip even the download with `JARVIS_NO_SPEAKER=1 bash install.sh`.
 
 ### Step 3 - two permissions in System Settings
 
@@ -186,7 +190,7 @@ asr worker ready
 
 and a short click says he is listening. Say "Jarvis". A chime, then ask
 something: "what is two times two". **The first question takes a while** - the
-600 MB transcriber is downloaded at that moment and nothing else. From the
+2.3 GB transcriber is downloaded at that moment and nothing else. From the
 second question on, an answer takes a few seconds.
 
 `Ctrl+C` stops him. To run him in the background instead, from any Claude Code
@@ -231,7 +235,7 @@ The key is worth setting next - see the section below.
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
 | `grant Input Monitoring to your terminal` in the log | the key listener could not start | grant it, or use `jarvis-key.sh` from Shortcuts - the rest works without it |
 | he answers with a network voice or a robotic system voice | the local voice model is missing | `bash install.sh models`; the log names the missing file |
-| the first answer takes a minute or more | the 600 MB transcriber is downloading | wait it out once |
+| the first answer takes a minute or more | the 2.3 GB transcriber is downloading | wait it out once |
 | every start is slow | `uv` rebuilding environments | normal only on the first start; check disk space if it repeats |
 | `piper: Error processing file ... espeak-ng-data` | the path to uv's cache is longer than espeak-ng can handle (about 240 characters) | keep the repository and your home folder at ordinary depths |
 
@@ -283,6 +287,84 @@ rm -rf ~/.claude/jarvis ~/.claude/tts-cache
 Then remove the terminal app from Microphone and Input Monitoring in System
 Settings if you no longer want it there. The Python environments live in
 `~/.cache/uv` and go away with `uv cache clean`.
+
+## Your agent's ears and mouth
+
+Jarvis does not think. He hears, he speaks, and he hands the words to a Claude
+Code session - so what he *can do* is exactly what that session can do.
+
+Run one exchange through `/assist` to see what that means. You type `/assist`
+in the session where you are working on a repository with a Jira MCP server
+configured. You say "Jarvis, what is left in the sprint". The listener
+transcribes it and drops the line into the session as an event. The agent reads
+it like any typed request: it calls the Jira MCP, counts the tickets, and speaks
+three sentences through the `voice-answer` skill. Nothing in this repository
+knows what Jira is. Swap the session for one in another repository with other
+tools, and he answers other questions.
+
+The same holds for rules. A session that is told to never push to `main` will
+not push to `main` because you asked out loud. Your CLAUDE.md, your hooks, your
+permission settings - all of it stays in force; the microphone is just another
+way to type.
+
+The standalone daemon (`jarvisd.sh`) is the light version of this: his own
+`claude -p` session, started in an empty folder so that nothing heavy is loaded
+on every question. It answers in about two seconds and has no tools unless you
+give it some - `JARVIS_MCP=1` in `jarvis.env` starts it with your MCP servers,
+at the cost of about two seconds per answer. Anything that needs real tools he
+passes to a [room](#rooms-and-actions).
+
+## Habits worth picking up
+
+Things that turned out to matter more than any feature, in the order people
+usually discover them.
+
+**"Tell me out loud when you are done."** Hand an agent a long task - a
+refactor, a test run, a review - and add that sentence. You go to another
+window, another task, another room; twenty minutes later a voice says "the
+review is done, three remarks, one of them about the migration". No tab
+switching, no glancing at a terminal every two minutes. This works from any
+session, whether or not it holds the microphone: the `voice-answer` skill
+speaks, and the daemon or listener stays out of its way.
+
+**Alerts about what matters, spoken.** Any session that watches something - a
+chat, a pipeline, a queue - can be told "say it out loud when someone mentions
+me" or "tell me when the deploy finishes". Everything else stays silent text in
+that session. The skill's own rules keep it honest: background noise is never
+spoken unless you asked for exactly that kind of noise, and a spoken report
+never ends in a question when you are not there to answer.
+
+**Ask from across the room.** "Jarvis, is the build green", "what is the chief
+doing", "anything new from Petrov" - status questions that used to mean sitting
+down and typing. He is listening at 2 % of a core, so leaving him on all day
+costs nothing.
+
+**Not at the desk at all?** `speak.sh --telegram` sends the same sentence as a
+voice message to your phone, and `tg_listen.py` takes questions back the same
+way. During a video call the skill switches to Telegram on its own, so the room
+never hears him.
+
+## What it costs your Mac
+
+Measured on a MacBook with an Apple M5 and 16 GB, with the English models.
+Memory is the process's resident size; the transcriber lives in unified memory
+that Activity Monitor attributes to the GPU, so its number is the peak of a
+one-shot run.
+
+| Piece | When it runs | Memory | CPU / time |
+|---|---|---|---|
+| listener with the Vosk wake model | always | 120 MB | about 2 % of one core, averaged over an hour |
+| the badge | always | 40 MB | under 1 % |
+| transcriber (parakeet-mlx) | loaded once, kept warm | about 1.2 GB | 0.5-0.6 s per phrase; 12 s to load cold |
+| voice, English (piper) | per phrase | 300 MB peak, then gone | 0.3 s to first sound, about 1 s for a sentence |
+| voice, Russian (vosk-tts) | per phrase | 400 MB peak; the worker exits after 3 quiet minutes | 0.9 s to first sound |
+| speaker check (CAM++) | per phrase, only with a profile | 160 MB | 1.6 s cold; a few tens of ms warm |
+| `claude -p` | per question | whatever your CLI uses | typically 1-3 s to the first sentence |
+
+So an idle day is 160 MB and a couple of percent of one core. The heavy part is
+the transcriber, and it is paid for in disk and unified memory, not in CPU: a
+question costs about half a second of work on the GPU and the rest
+is Claude thinking. Nothing here runs a GPU hot or spins a fan.
 
 ## The voice lock - he answers only you
 
@@ -504,13 +586,10 @@ agent does the work in that repository and answers out loud. `/assist-off` gives
 the microphone back, `/jarvis-daemon` returns it to the standalone daemon.
 
 There is one microphone, so only one of them can hold it. Both drop in through
-the same file lock, and each tells you who it took it from.
-
-![One microphone per machine: the standalone daemon or one Claude Code session holds it; /assist moves it to the session, /jarvis-daemon moves it back](docs/img/one-mic.svg)
-
-*Who holds the microphone, and the two commands that move it. Any session can
-still speak through the voice-answer skill; your spoken reply always lands with
-the holder, which forwards it by name.*
+the same file lock, and each tells you who it took it from. Any session can
+still speak through the `voice-answer` skill without holding the microphone;
+your spoken reply always lands with the holder, which forwards it by name to
+the session that asked.
 
 ## Rooms and actions
 
