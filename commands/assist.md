@@ -73,6 +73,32 @@ Every line from the monitor is an event, not a chat message from the owner.
 | `LISTENING: …` | the listener is up | nothing, it is a confirmation |
 | `HEARD: <text>` | the owner said this out loud | treat it as an ordinary request |
 | `BUSY: … pid N` | somebody took the microphone between steps | wait a couple of seconds, run `take-mic.sh` again and restart the monitor |
+| `LANGUAGE: …` | this installation has never been asked which language to speak | ask in the chat, out loud as well, and apply the answer - see below |
+
+### The first run: which language
+
+A `LANGUAGE` line means nobody has chosen yet, and the default is only a default. Do this once, before anything else:
+
+1. **Ask in the chat, in the language of the line you got** - one sentence, e.g. "Which language should I speak with you? Say or type it, for example English or Russian."
+2. **Ask the same thing out loud**, so somebody who is not looking at the screen hears it too:
+
+```bash
+JARVIS_BACKEND=system bash ~/.claude/jarvis/say.sh "Which language should I speak? Say it in that language, or type it in the chat."
+```
+
+   The system voice on purpose: the language has not been chosen, so the model for the locale's own voice may not be on disk yet.
+
+3. **Apply whatever they answer** - typed in the chat or spoken, in any language:
+
+```bash
+uv run ~/.claude/jarvis/setup_lang.py "по-русски"
+```
+
+   It matches the answer against the installed locales, writes `JARVIS_LANG` into `jarvis.env`, and fetches the models that language needs - a few minutes the first time, and nothing at all if they are already there. If it says no language was found, read back what it lists and ask again.
+
+4. **Restart the listener** - `TaskStop` the monitor and start it again the way step 3 of turning it on says. Everything about a language is read once, at start.
+
+Then say in one line which language he now speaks and what the wake word is.
 
 Work on a `HEARD` goes the usual way, with all your tools and the project's rules. Four things differ.
 

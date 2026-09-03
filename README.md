@@ -840,7 +840,18 @@ context, never the answer. Check yours with
 a default, so the first "Jarvis" is answered with one question in English -
 which language should I speak? Say "Russian", or "по-русски", and he saves the
 answer in `jarvis.env`, fetches the models that language needs, and comes back
-speaking it. It happens once; after that the question never returns.
+speaking it. It happens once; after that the question never returns. The
+question is read by the macOS voice rather than his own, because at that moment
+his own may not be downloaded yet.
+
+Inside an agent session `/assist` asks the same thing **in the chat as well** -
+the owner is looking at a text window there, and a question only spoken into an
+empty room is a question nobody answers. Either answer reaches the same place:
+
+```bash
+uv run ~/.claude/jarvis/setup_lang.py "по-русски"   # match, save, fetch
+uv run ~/.claude/jarvis/setup_lang.py               # which one is set now
+```
 
 You can skip the question by choosing before the first start: put
 `JARVIS_LANG=ru` in `jarvis.env` and run `bash install.sh models`.

@@ -2627,43 +2627,21 @@ def say_in(code: str, text: str, backend: str = "") -> None:
 
 
 def save_language(code: str) -> None:
-    """Write the choice into jarvis.env, creating it if this is a first run."""
-    path = pathlib.Path(ENV_FILE)
-    if not path.exists():
-        try:
-            path.write_text(
-                pathlib.Path(JARVIS_DIR, "jarvis.env.example").read_text(
-                    encoding="utf-8"), encoding="utf-8")
-        except OSError as e:
-            log(f"setup: no jarvis.env to write to ({e})")
+    """Write the choice into jarvis.env. Shared with the agent's own /assist
+    dialogue, which reaches setup_lang.py from the command line instead."""
     try:
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(f"\n# Chosen out loud on the first wake.\nJARVIS_LANG={code}\n")
-    except OSError as e:
+        import setup_lang
+        setup_lang.save(code, "Chosen out loud on the first wake.")
+    except (OSError, ImportError) as e:
         log(f"setup: could not save the language ({e})")
 
 
 def fetch_models(code: str) -> None:
-    """Whatever this language needs and the disk does not have.
-
-    install.sh skips what is already there, so this is cheap when the models
-    happen to be the ones already downloaded, and a few minutes when they are
-    not.
-    """
-    # The installer prints its whole "here is what to do next" block, and all of
-    # it landed in listener.log - 26 lines of it on the first run of this. Only
-    # what it actually did to the disk is worth keeping.
-    interesting = ("downloading", "already there", "building", "words written",
-                   "voice runtime", "warning", "failed", "not found")
+    """Whatever this language needs and the disk does not have."""
     try:
-        r = subprocess.run(["bash", os.path.join(JARVIS_DIR, "install.sh"), "models"],
-                           env=dict(os.environ, JARVIS_LANG=code),
-                           capture_output=True, text=True, timeout=1800)
-        for line in ((r.stdout or "") + "\n" + (r.stderr or "")).splitlines():
-            line = line.strip()
-            if line and any(word in line.lower() for word in interesting):
-                log(f"setup: {line[:120]}")
-    except (OSError, subprocess.TimeoutExpired) as e:
+        import setup_lang
+        setup_lang.fetch(code, log=lambda line: log(f"setup: {line}"))
+    except ImportError as e:
         log(f"setup: fetching the {code} models failed ({e})")
 
 
@@ -2973,6 +2951,17 @@ def listen_only_main() -> None:
     print(f"LISTENING: waiting for {LANG.name!r}"
           f"{f' on behalf of session {owner!r}' if owner else ''} ({engine.name})",
           flush=True)
+    # A question only spoken into an empty room is a question nobody answers.
+    # The session that took the microphone has a chat window in front of the
+    # owner, so it is told to ask there too, and the answer typed back is
+    # applied by the same script the spoken one goes through.
+    if NEEDS_LANGUAGE:
+        print("LANGUAGE: nobody has chosen a language yet - I speak "
+              f"{LANG.english_name()} by default. Ask in the chat which language "
+              "to use, say the same question out loud, and apply the answer with "
+              f"`uv run {JARVIS_DIR}/setup_lang.py \"<the answer>\"`, then start "
+              "the listener again. Answering out loud on the first wake works too.",
+              flush=True)
     try:
         with Mic(engine, audio_q).open_ctx():
             pending = 0.0       # when a phrase went to an agent still working on it

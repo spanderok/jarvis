@@ -120,7 +120,8 @@ language_fetching = "One moment, fetching the {language} voice."
 
 # What you can say to pick this language, in it and in English. Matched against
 # the whole answer, so keep them to words nobody says by accident.
-language_names = ["english", "английский", "inglese", "anglais"]
+language_names = ["english", "английский", "по английски", "английском",
+                  "inglese", "anglais", "englisch"]
 # Said once, in this language, right after the choice is saved.
 language_chosen = "English it is. Ask away."
 
