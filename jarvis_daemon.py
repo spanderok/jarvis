@@ -109,6 +109,34 @@ for _extra in ("/opt/homebrew/bin", "/usr/local/bin",
     if os.path.isdir(_extra) and _extra not in os.environ.get("PATH", "").split(":"):
         os.environ["PATH"] = f"{_extra}:{os.environ.get('PATH', '')}"
 
+# Personal settings live in jarvis.env, and jarvisd.sh / listen.sh export it
+# before starting this file. Reading it here as well costs one file open and
+# makes the settings hold however he was started - by hand, from a launcher, or
+# by an agent session that runs this module directly.
+ENV_FILE = os.path.expanduser(
+    os.environ.get("JARVIS_ENV") or "~/.claude/jarvis/jarvis.env")
+
+
+def load_env_file(path: str = "") -> None:
+    """Fill in from jarvis.env whatever the environment does not already say."""
+    try:
+        text = open(path or ENV_FILE, encoding="utf-8").read()
+    except OSError:
+        return
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        # The shell wins: an explicit JARVIS_LANG=ru in front of the command is
+        # how a second language is tried without editing the file.
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_env_file()
+
 # Nothing he says or listens for is written here. It all comes from
 # locales/<lang>.toml - see lang.py, and JARVIS_LANG to pick one.
 #
@@ -397,13 +425,17 @@ FLOOR_FALL = float(os.environ.get("JARVIS_FLOOR_FALL", "0.15"))
 # The target moved from F13 to F18 on 21.08: F13 is Print Screen on a Mac, and
 # pressing M5 inside Google Sheets wiped the cell being edited. F16..F20 are the
 # only function keys neither macOS nor browsers claim.
-DEFAULT_TAP_KEYS = "<f18>"
-# Done keys: one press means "answer now", never anything else. Space used to be
-# here and it was a bad neighbour - the daemon does not suppress the key, so every
-# "I'm done" also typed a space into whatever window was in front. The right Option
-# key does nothing on its own in macOS, is reachable by the thumb without looking,
-# and no application binds it alone.
-DEFAULT_DONE_KEYS = "<alt_r>"
+# The right Option key is the default because everybody already has one: it
+# does nothing on its own in macOS, no application binds it alone, it types no
+# character, and it is under the thumb without looking. A macro key remapped to
+# F18 by keymap.sh is the other good answer - JARVIS_TAP_KEYS="<f18>".
+DEFAULT_TAP_KEYS = "<alt_r>"
+# Done keys: one press means "answer now" and nothing else, not even waking him.
+# Empty by default, because the tap key above already ends a take - this is for
+# people who want the two roles on two different keys. Space was tried here and
+# was a bad neighbour: the daemon does not swallow the key, so every "I'm done"
+# also typed a space into whatever window was in front.
+DEFAULT_DONE_KEYS = ""
 # Off key: shuts him up and stops him listening for the wake word. Only acts
 # mid-exchange, so pressing Escape in an editor never touches him.
 DEFAULT_OFF_KEYS = "<esc>"
@@ -2478,7 +2510,8 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
             wait_sec: float, speaker=None,
             max_sec: float = MAX_UTTERANCE_SEC,
             verify: bool = True,
-            refuse_aloud: bool = True) -> str | None:
+            refuse_aloud: bool = True,
+            any_language: bool = False) -> str | None:
     """Record one utterance and return its transcript ("" if unintelligible).
 
     verify=False is for takes the key started - that is the owner's own hand on the
@@ -2486,6 +2519,10 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
 
     refuse_aloud=False still checks the voice and still drops a stranger, only
     without saying so - for the follow-up window, which nobody asked for.
+
+    any_language=True keeps a phrase in another language instead of dropping it
+    as noise. Exactly one caller wants that: the first-wake question about which
+    language to speak, whose whole point is to be answered in another one.
     """
     audio = record(audio_q, noise_floor, trigger, keep_head, wait_sec, max_sec)
     if audio is None:
@@ -2520,10 +2557,158 @@ def capture(audio_q, noise_floor, trigger, keep_head: bool,
     log(f"heard ({secs:.1f}s audio, {time.monotonic() - t0:.1f}s ASR): {text!r}")
     if speaker is not None and speaker.is_echo(text):
         return None
-    if text and not in_locale(text):
+    if text and not any_language and not in_locale(text):
         log(f"not {LANG.lang}, treating as noise: {text!r}")
         return None
     return text
+
+
+# --- the first wake: which language should he speak? -------------------------
+#
+# A fresh install has no language, only a default. Rather than make the owner
+# find JARVIS_LANG in a settings file, he asks once, out loud, the first time
+# he is woken - in English, because English is what a plain `install.sh` put on
+# disk. The answer is saved, the missing models are fetched, and he restarts
+# into that language. It happens once in the life of an installation.
+
+
+def language_is_chosen() -> bool:
+    """Has anybody said which language he speaks?
+
+    The environment is checked first because that is where jarvisd.sh and
+    listen.sh put it, and the file after it, so a daemon started straight from
+    python (an agent session does that) sees the same answer.
+    """
+    if os.environ.get("JARVIS_LANG", "").strip():
+        return True
+    try:
+        text = pathlib.Path(ENV_FILE).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return any(line.strip().startswith("JARVIS_LANG=")
+               for line in text.splitlines())
+
+
+NEEDS_LANGUAGE = not language_is_chosen()
+
+
+def say_in(code: str, text: str) -> None:
+    """Speak one sentence in a named language, whatever this process is set to.
+
+    say.sh reads the voice out of the locale, so handing it JARVIS_LANG is
+    enough - and it is the only way to confirm the choice in the new language
+    before the restart that actually adopts it.
+    """
+    if not text:
+        return
+    try:
+        subprocess.run(["bash", os.path.join(JARVIS_DIR, "say.sh"), text],
+                       env=dict(os.environ, JARVIS_LANG=code), timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"setup: could not speak the {code} line ({e})")
+
+
+def save_language(code: str) -> None:
+    """Write the choice into jarvis.env, creating it if this is a first run."""
+    path = pathlib.Path(ENV_FILE)
+    if not path.exists():
+        try:
+            path.write_text(
+                pathlib.Path(JARVIS_DIR, "jarvis.env.example").read_text(
+                    encoding="utf-8"), encoding="utf-8")
+        except OSError as e:
+            log(f"setup: no jarvis.env to write to ({e})")
+    try:
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"\n# Chosen out loud on the first wake.\nJARVIS_LANG={code}\n")
+    except OSError as e:
+        log(f"setup: could not save the language ({e})")
+
+
+def fetch_models(code: str) -> None:
+    """Whatever this language needs and the disk does not have.
+
+    install.sh skips what is already there, so this is cheap when the models
+    happen to be the ones already downloaded, and a few minutes when they are
+    not.
+    """
+    try:
+        r = subprocess.run(["bash", os.path.join(JARVIS_DIR, "install.sh"), "models"],
+                           env=dict(os.environ, JARVIS_LANG=code),
+                           capture_output=True, text=True, timeout=1800)
+        for line in (r.stdout or "").splitlines():
+            if line.strip() and not line.strip().startswith("#"):
+                log(f"setup: {line.strip()[:120]}")
+    except (OSError, subprocess.TimeoutExpired) as e:
+        log(f"setup: fetching the {code} models failed ({e})")
+
+
+def become(code: str) -> None:
+    """Restart this process in the chosen language.
+
+    Everything language-shaped - the wake recognizer, the voice, the persona,
+    the words on the badge - is read once at import, so becoming another
+    language is a restart and not a reload. exec keeps the pid and the open
+    stdout, which is what lets the listener do this without the agent session
+    that is watching it noticing anything but a new LISTENING line.
+    """
+    log(f"language set to {code}, restarting into it")
+    kill_children()
+    subprocess.run(["pkill", "-f", "asr_worker.py"], capture_output=True)
+    os.environ["JARVIS_LANG"] = code
+    try:
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+    except OSError as e:                      # nothing left to do but say so
+        log(f"setup: could not restart ({e}); start him again by hand")
+        raise SystemExit(0)
+
+
+def choose_language(audio_q, noise_floor: float, trigger: Trigger, engine) -> None:
+    """Ask which language to speak, save the answer, come back speaking it.
+
+    Two tries, then he gives up and stays in the default language for this run -
+    the question is asked again on the next wake, and answering it is never the
+    price of using him.
+    """
+    setup = lang_mod.setup_lines()
+    for attempt in (1, 2):
+        if attempt == 1:
+            line = setup.language_ask
+        else:
+            # Name what is actually installed rather than a pair written into
+            # the sentence: adding a locale must not leave this line stale.
+            names = []
+            for code in lang_mod.available():
+                try:
+                    names.append(lang_mod.load(code).english_name())
+                except lang_mod.LocaleError:
+                    continue
+            line = lang_mod.fill(setup.language_unclear,
+                                 languages=", ".join(names))
+        say_in(setup.lang, line)
+        chime()
+        heard = capture(audio_q, noise_floor, trigger, keep_head=False,
+                        wait_sec=WAIT_SPEECH_SEC, verify=False,
+                        any_language=True)
+        engine.reset()
+        flush(audio_q)
+        log(f"setup: language answer {heard!r}")
+        code = lang_mod.match_language(heard or "")
+        if not code:
+            continue
+        save_language(code)
+        chosen = lang_mod.load(code)
+        # The models come before the confirmation on purpose: the sentence that
+        # confirms the choice is the first one his new voice ever says, and it
+        # should not be read by the old one because a file was missing.
+        say_in(setup.lang, lang_mod.fill(setup.language_fetching,
+                                         language=chosen.english_name()))
+        fetch_models(code)
+        say_in(code, chosen.language_chosen)
+        become(code)
+        return
+    log("setup: no language recognised, staying in "
+        f"{LANG.lang} until the next wake")
 
 
 def hear_after_wake_only(audio_q, noise_floor: float, trigger: Trigger, engine,
@@ -2860,6 +3045,11 @@ def listen_only_main() -> None:
                 trigger.mark_wake_source(hot)
                 log("hotkey!" if hot else "wake!")
                 trace("WOKE: " + ("key press" if hot else "heard the name"))
+                # Before anything else on the very first wake: he does not
+                # know what language to speak yet, and asks.
+                if NEEDS_LANGUAGE:
+                    choose_language(audio_q, noise_floor, trigger, engine)
+                    continue
                 turn_start()
                 chime()
                 text = capture(audio_q, noise_floor, trigger,
@@ -3111,6 +3301,11 @@ def main() -> None:
                 trigger.start.clear()
                 trigger.mark_wake_source(hot)
                 log("hotkey!" if hot else "wake!")
+                # Before anything else on the very first wake: he does not
+                # know what language to speak yet, and asks.
+                if NEEDS_LANGUAGE:
+                    choose_language(audio_q, noise_floor, trigger, engine)
+                    continue
                 turn_start()
                 chime()
                 text = capture(audio_q, noise_floor, trigger, speaker=speaker,
@@ -3279,6 +3474,8 @@ if __name__ == "__main__":
                 print(f"  session {name!r}: pid {pid}")
         for action in CFG.actions:
             print(f"action {action.id!r}: {action.speak}, {action.run or '-'}")
+        print("language: " + (f"{LANG.lang}, chosen" if not NEEDS_LANGUAGE else
+              f"{LANG.lang} by default - he will ask for one on the first wake"))
         print(f"silence={SILENCE_SEC}s followup={FOLLOWUP_SEC}s "
               f"double_tap={DOUBLE_TAP_SEC}s "
               f"tap={os.environ.get('JARVIS_TAP_KEYS', DEFAULT_TAP_KEYS)} "

@@ -51,6 +51,13 @@ owner_intro_anon = "you serve the owner. "
 persona = "You are a butler, {owner_intro}Be brief."
 voice_ask = "(spoken) {q}"
 relay_ask = "ask {peer}: {q}"
+language_names = ["testish", "тестовый"]
+language_chosen = "Testish it is."
+[badge]
+idle = "asleep"
+listening = "listening"
+thinking = "thinking"
+speaking = "talking"
 [say]
 action_done = "Done."
 action_failed = "No."
@@ -245,3 +252,70 @@ def test_no_spoken_line_is_hardcoded_in_the_router(tmp_path):
                 if re.search(r"[Ѐ-ӿ]", line)
                 and not line.lstrip().startswith("#")]
     assert not cyrillic, f"spoken text left in plugins.py: {cyrillic}"
+
+
+# --------------------------------------------------------------------------
+# choosing a language out loud, and the word on the badge
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("code", LANGS)
+def test_every_shipped_locale_names_its_own_badge_words(code):
+    """A missing word leaves the capsule blank in that state."""
+    loc = lang.load(code, REPO)
+    for state in lang.REQUIRED_BADGE:
+        assert loc.badge[state].strip()
+
+
+@pytest.mark.parametrize("code", LANGS)
+def test_every_shipped_locale_can_be_chosen_out_loud(code):
+    """The first-wake question is useless for a language nobody can name."""
+    loc = lang.load(code, REPO)
+    assert loc.language_names, "no way to say which language this is"
+    assert loc.language_chosen.strip(), "nothing to confirm the choice with"
+    assert loc.english_name().isascii(), "the English question needs an English name"
+
+
+def test_the_default_locale_carries_the_setup_question():
+    """It is asked before anybody has chosen, so only this one has to hold it."""
+    loc = lang.load(lang.DEFAULT_LANG, REPO)
+    for key in lang.SETUP_ONLY:
+        assert getattr(loc, key).strip(), f"{key} is what a first run says"
+    assert "{language}" in loc.language_fetching
+    # The retry line names the locales on disk, so adding one cannot make it lie.
+    assert "{languages}" in loc.language_unclear
+
+
+@pytest.mark.parametrize("said, want", [
+    ("давай по-русски", "ru"),
+    ("Russian, please", "ru"),
+    ("english", "en"),
+    ("let us speak English then", "en"),
+    ("по русски", "ru"),
+    ("what time is it", None),
+    ("", None),
+])
+def test_an_answer_about_language_picks_a_locale(said, want):
+    assert lang.match_language(said, REPO) == want
+
+
+def test_the_longest_name_wins(tmp_path):
+    """A language whose name contains another must not lose to it."""
+    write(tmp_path, COMPLETE, "xx")
+    write(tmp_path, COMPLETE.replace(
+        'language_names = ["testish", "тестовый"]',
+        'language_names = ["old testish"]'), "yy")
+    assert lang.match_language("speak old testish", tmp_path) == "yy"
+
+
+def test_a_locale_without_badge_words_is_refused(tmp_path):
+    body = COMPLETE.replace('listening = "listening"\n', "")
+    write(tmp_path, body, "xx")
+    with pytest.raises(lang.LocaleError, match="listening"):
+        lang.load("xx", tmp_path)
+
+
+def test_a_locale_nobody_can_ask_for_is_refused(tmp_path):
+    body = COMPLETE.replace('language_names = ["testish", "тестовый"]\n', "")
+    write(tmp_path, body, "xx")
+    with pytest.raises(lang.LocaleError, match="language_names"):
+        lang.load("xx", tmp_path)

@@ -109,6 +109,21 @@ spoken_swaps = [
 ]
 
 
+
+# --- choosing a language -----------------------------------------------------
+# Asked the very first time he is woken, before anybody has picked a language.
+# It is asked in this file's language and no other, because the models a plain
+# install.sh put on disk are this language's - see lang.py, setup_lines().
+language_ask = "Which language should I speak? Say it in that language, or say the English name for it."
+language_unclear = "I did not catch a language. You can say: {languages}."
+language_fetching = "One moment, fetching the {language} voice."
+
+# What you can say to pick this language, in it and in English. Matched against
+# the whole answer, so keep them to words nobody says by accident.
+language_names = ["english", "английский", "inglese", "anglais"]
+# Said once, in this language, right after the choice is saved.
+language_chosen = "English it is. Ask away."
+
 # --- fallbacks for rooms and actions -----------------------------------------
 # Each room and action can carry its own wording in config/rooms.toml and
 # config/actions.toml. These are what he says when it does not.
@@ -160,3 +175,13 @@ say = "Jarvis, what has piled up in the mail, I am done for today"
 id = "fast"
 how = "Fast and careless, swallowing the ends of words."
 say = "Jarvis, send me the result on Telegram when you are finished"
+
+
+# --- the badge ---------------------------------------------------------------
+# One word per state on the floating capsule. Kept short: it is glanced at, not
+# read.
+[badge]
+idle = "asleep"
+listening = "listening"
+thinking = "thinking"
+speaking = "talking"
