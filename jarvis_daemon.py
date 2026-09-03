@@ -607,8 +607,13 @@ def apply_keymap() -> None:
     script = os.path.join(JARVIS_DIR, "keymap.sh")
     try:
         r = subprocess.run(["bash", script], capture_output=True, text=True, timeout=5)
-        if r.stdout.strip():
-            log(r.stdout.strip())
+        # The first line is the verdict; the rest is advice for the terminal.
+        # stderr goes in too - a warning that only went there was invisible in
+        # the log, and the log was the only place the owner looked.
+        for stream in (r.stdout, r.stderr):
+            line = stream.strip().splitlines()[0] if stream.strip() else ""
+            if line:
+                log(line)
     except (OSError, subprocess.TimeoutExpired) as e:
         log(f"keymap failed: {e}")
 
@@ -1617,6 +1622,16 @@ class Asr:
     def __init__(self):
         self.proc: subprocess.Popen | None = None
         self.lock = threading.Lock()
+        self.begun = False
+
+    def begin(self) -> None:
+        """Start warming the worker up. Only a mode that will really transcribe
+        calls this: the first run downloads 2.3 GB of model, and importing this
+        file - `--selfcheck` does - must not pull that behind the user's back.
+        """
+        if self.begun:
+            return
+        self.begun = True
         threading.Thread(target=self.start, daemon=True).start()
 
     def start(self) -> None:
@@ -2730,6 +2745,7 @@ def listen_only_main() -> None:
         print(f"BUSY: another process already holds the microphone, pid {busy}", flush=True)
         return
     apply_keymap()
+    ASR.begin()
     warm_voiceprint()
     engine = make_engine()
     trigger = Trigger()
@@ -2879,6 +2895,7 @@ def main() -> None:
     except OSError:
         pass
     apply_keymap()
+    ASR.begin()
     warm_voiceprint()
     engine = make_engine()
     trigger = Trigger()
@@ -3268,14 +3285,13 @@ if __name__ == "__main__":
               f"done={os.environ.get('JARVIS_DONE_KEYS', DEFAULT_DONE_KEYS)} "
               f"off={os.environ.get('JARVIS_OFF_KEYS', DEFAULT_OFF_KEYS)}")
         sys.exit(0)
-    # SIGTERM without a handler skips every finally block, so a killed listener
-    # left the state file on "listening" and the badge kept showing it
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
-    try:
-        listen_only_main() if "--listen" in sys.argv else main()
-    except (KeyboardInterrupt, SystemExit):
-        log("stopped")
-    finally:
+    # Leaving without this skips the workers and the state file, so a killed
+    # listener left the badge showing "listening" for a process that is gone.
+    _cleaned = threading.Lock()
+
+    def cleanup() -> None:
+        if not _cleaned.acquire(blocking=False):
+            return
         kill_children()
         for worker in ("tts_worker.py", "vosk_worker.py"):
             subprocess.run(["pkill", "-f", worker], capture_output=True)
@@ -3299,3 +3315,21 @@ if __name__ == "__main__":
                 STATE_FILE.write_text("off")
             except OSError:
                 pass
+
+    # `sys.exit` from a signal handler only raises in the main thread, and the
+    # main thread spends its life inside the audio stream - a C call that does
+    # not return until the next block of sound. `kill <pid>` then did nothing
+    # at all, and only Ctrl+C or `kill -9` stopped him. So the handler tidies
+    # up itself and leaves through os._exit, which no blocked thread can hold.
+    def on_term(*_):
+        log("stopped")
+        cleanup()
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, on_term)
+    try:
+        listen_only_main() if "--listen" in sys.argv else main()
+    except (KeyboardInterrupt, SystemExit):
+        log("stopped")
+    finally:
+        cleanup()
