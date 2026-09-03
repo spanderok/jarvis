@@ -20,4 +20,19 @@ for pid in $(pgrep -f "jarvis_daemon.py --listen" 2>/dev/null); do
 done
 rm -f "$HOME/.claude/jarvis/listener.pid" "$HOME/.claude/jarvis/listener.owner"
 
+# A second standalone daemon is the same collision, and this used to miss it -
+# the loop above only matches the --listen form, so running this script twice
+# left two daemons on one microphone, both logging "Jarvis daemon up".
+prev=$(cat "$HOME/.claude/jarvis/daemon.pid" 2>/dev/null)
+if [ -n "$prev" ] && [ "$prev" != "$$" ] && kill -0 "$prev" 2>/dev/null; then
+  echo "taking the microphone from the daemon already running (pid $prev)"
+  kill "$prev" 2>/dev/null
+  # Give it a moment to close the input stream, or the new one opens it first
+  # and neither hears anything.
+  for _ in 1 2 3 4 5 6; do
+    kill -0 "$prev" 2>/dev/null || break
+    sleep 0.5
+  done
+fi
+
 exec uv run --quiet $HOME/.claude/jarvis/jarvis_daemon.py "$@"
