@@ -210,19 +210,39 @@ Skip even the download with `JARVIS_NO_SPEAKER=1 bash install.sh`.
 
 ### Step 3 - two permissions in System Settings
 
-Both are granted to the **terminal app you start Jarvis from** - Terminal.app,
-iTerm2, Warp, whichever one it is. Not to `uv`, not to `python`.
+The installer ends by asking macOS about both and printing what is missing, by
+name. You can ask again at any time:
 
-1. **Microphone** - required. System Settings -> Privacy & Security ->
-   Microphone -> turn on your terminal. macOS usually asks by itself the first
+```bash
+uv run ~/.claude/jarvis/perm_check.py
+```
+
+```
+permissions for WebStorm:
+  microphone        granted
+  input monitoring  MISSING
+      System Settings -> Privacy & Security -> Input Monitoring -> add WebStorm,
+      then quit it completely and open it again.
+      The pane opens straight from here: open 'x-apple.systempreferences:...'
+```
+
+Both are granted to the **application you start him from**, and that is not
+always the obvious one: run him from an IDE's terminal panel and the permission
+belongs to the IDE, not to Terminal.app. The check walks up the process chain
+and names it, so there is nothing to guess. Neither permission is granted to
+`uv` or to `python`.
+
+1. **Microphone** - required. Without it he hears nothing, and nothing says so:
+   the stream opens and delivers silence. macOS usually asks by itself the first
    time the daemon opens the microphone; if that dialog never appeared, add the
-   app here by hand.
-2. **Input Monitoring** - optional, only for the hotkeys. System Settings ->
-   Privacy & Security -> Input Monitoring -> turn on your terminal. Without it
-   everything works except the key; there is a way to have the key with no
-   permission at all, see [The key](#the-key).
+   app by hand.
+2. **Input Monitoring** - optional, only for the key. Without it macOS drops
+   every press before it arrives, so the key looks broken rather than
+   unpermitted - the daemon says so in `listener.log` instead of claiming the
+   keys are live. Everything else works; there is also a way to have the key
+   with no permission at all, see [The key](#the-key).
 
-After changing either one, quit the terminal app completely and open it again -
+After changing either one, quit the application completely and open it again -
 macOS applies these on launch.
 
 ### Step 4 - start him and say his name
@@ -264,6 +284,7 @@ Each of these takes seconds and tells you which part is off, if any.
 cd ~/.claude/jarvis
 uv run lang.py                          # the language, the wake word and the voices it picked
 bash say.sh "Hello, I am up."           # you hear the local voice
+uv run perm_check.py                    # microphone and Input Monitoring, by app name
 uv run jarvis_daemon.py --selfcheck     # wake engine, routing examples, rooms, keys
 uv run mic_check.py                     # talk; numbers above zero mean the mic reaches this terminal
 ```
@@ -294,7 +315,7 @@ The key is worth setting next - see [The key](#the-key).
 | `warning: the claude CLI is not on PATH` | he will listen but cannot answer | install Claude Code, run `claude` once to log in |
 | `Vosk model not found: .../models/...` | the wake model is not there | `bash install.sh models` |
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
-| `grant Input Monitoring to your terminal` in the log | the key listener could not start | grant it, or use `jarvis-key.sh` from Shortcuts - the rest works without it |
+| `keys are dead: <app> has no Input Monitoring` in the log | macOS drops every key press before he sees it | `uv run perm_check.py` prints the link to the right pane; or use `jarvis-key.sh` from Shortcuts, which needs no permission |
 | `keymap skipped` or `keymap failed` in the log | no keyboard was remapped - none is configured, or the configured one is unplugged | normal unless you wanted a remapped key; `bash keymap.sh list`, then fill in `jarvis.env` |
 | he answers with a network voice or a robotic system voice | the local voice failed - a missing model, or the espeak-ng error in the row below | `bash install.sh models`; if the models are there, run `bash say.sh test` by hand and read what piper prints |
 | the first answer takes a minute or more | the 2.3 GB transcriber is downloading | wait it out once |
