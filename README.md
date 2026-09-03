@@ -150,9 +150,12 @@ Two more things are optional:
   the packages on the first run. The Python that ships with macOS (3.9) is never
   used.
 
-Expect about 2.6 GB of disk for the models - 2.3 GB of that is the transcriber,
-fetched on the first question - and an internet connection for the one-time
-downloads.
+Expect about 4.5 GB of disk and an internet connection for the one-time
+downloads. Measured on a clean install: 155 MB of models in the repository,
+2.3 GB for the transcriber in `~/.cache/huggingface`, and about 2 GB of Python
+environments in `~/.cache/uv`. Only the first of those three is inside the
+repository folder; `uv cache clean` reclaims the third at the price of the next
+start being slow again.
 
 ### Step 1 - get the code
 
@@ -198,7 +201,7 @@ starts with `warning:` is not fatal - read it, it says what will be missing.
 | `vosk-model-small-en-us-0.15` | hearing the wake word | 41 MB | [alphacephei.com](https://alphacephei.com/vosk/models) |
 | `en_GB-alan-medium` | his voice (piper) | 63 MB | [piper-voices](https://huggingface.co/rhasspy/piper-voices) |
 | `campplus.onnx` | telling your voice from a stranger's | 28 MB | [CAM++ ONNX](https://huggingface.co/FunAudioLLM/CosyVoice-300M) |
-| `parakeet-tdt-0.6b-v3` | transcribing the question | 2.3 GB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3) - **on the first question**, not by the installer |
+| `parakeet-tdt-0.6b-v3` | transcribing the question | 2.3 GB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3) - **when the daemon first starts**, not by the installer |
 
 Nothing is bundled and `models/` is in `.gitignore`. All of them are free and
 need no account. The speaker model is downloaded but **not used** until you
@@ -236,10 +239,15 @@ Jarvis daemon up. Engine: vosk (vosk-model-small-en-us-0.15) ...
 asr worker ready
 ```
 
-and a short click says he is listening. Say "Jarvis". A chime, then ask
-something: "what is two times two". **The first question takes a while** - the
-2.3 GB transcriber is downloaded at that moment and nothing else. From the
-second question on, an answer takes a few seconds.
+**The first start also downloads the 2.3 GB transcriber**, in the background,
+which is why `asr worker ready` can be minutes behind the line above it on a
+slow connection. Nothing else waits for it: he hears his name and chimes
+straight away, and a question asked before the model is here is transcribed by
+a slower one-shot run. From the second question on, an answer takes a few
+seconds.
+
+A short click says he is listening. Say "Jarvis". A chime, then ask something:
+"what is two times two".
 
 `Ctrl+C` stops him. To run him in the background instead, from any Claude Code
 session type `/jarvis-daemon`.
@@ -283,7 +291,8 @@ The key is worth setting next - see [The key](#the-key).
 | `Vosk model not found: .../models/...` | the wake model is not there | `bash install.sh models` |
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
 | `grant Input Monitoring to your terminal` in the log | the key listener could not start | grant it, or use `jarvis-key.sh` from Shortcuts - the rest works without it |
-| he answers with a network voice or a robotic system voice | the local voice model is missing | `bash install.sh models`; the log names the missing file |
+| `keymap skipped` or `keymap failed` in the log | no keyboard was remapped - none is configured, or the configured one is unplugged | normal unless you wanted a remapped key; `bash keymap.sh list`, then fill in `jarvis.env` |
+| he answers with a network voice or a robotic system voice | the local voice failed - a missing model, or the espeak-ng error in the row below | `bash install.sh models`; if the models are there, run `bash say.sh test` by hand and read what piper prints |
 | the first answer takes a minute or more | the 2.3 GB transcriber is downloading | wait it out once |
 | every start is slow | `uv` rebuilding environments | normal only on the first start; check disk space if it repeats |
 | `piper: Error processing file ... espeak-ng-data` | the path to uv's cache is longer than espeak-ng can handle (about 240 characters) | keep the repository and your home folder at ordinary depths |
@@ -370,6 +379,11 @@ So there are two ways to run him, and one microphone between them:
 - **`/assist`** in a Claude Code session - that session takes the microphone
   and becomes Jarvis, with all its tools. `/assist-off` releases it,
   `/jarvis-daemon` starts the daemon again.
+
+`/assist` needs one thing the daemon does not: the `Monitor` tool, which is how
+the session keeps a listener running between your messages. If your Claude Code
+does not have it, `/assist` cannot start and `jarvisd.sh` is the way in - every
+other piece here, the `voice-answer` skill included, works without it.
 
 Whoever takes the microphone says who had it before. Any session can still
 speak through the `voice-answer` skill without holding it, and your spoken
@@ -837,7 +851,16 @@ log holds the reason for every take that went wrong.
 
 Pull requests are welcome for what the README promises and the code does not
 yet do: another language, another voice backend, a room you built that others
-would want.
+would want. The routing, the locales and the plugin loader have tests, and they
+need nothing installed:
+
+```bash
+cd ~/.claude/jarvis && uv run --with pytest pytest tests/ -q
+```
+
+A new locale or a new room is worth a line in `tests/` - a half-translated
+locale fails silently otherwise, with him saying nothing where a sentence
+belonged.
 
 ## License
 
