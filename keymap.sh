@@ -51,25 +51,50 @@ if [ "${1:-on}" = "list" ]; then
   exit 0
 fi
 
-# Scoping the remap to one keyboard keeps End working everywhere else. Without a
-# VendorID it would apply to every keyboard, the built-in one included.
+# Scoping the remap to one keyboard keeps End working everywhere else, so a
+# keyboard to point at is required rather than optional: without one there is
+# nothing to remap and the script says so instead of pretending.
 if [ -n "$VENDOR" ] && [ -n "$PRODUCT" ]; then
   MATCH="{\"VendorID\":$((VENDOR)),\"ProductID\":$((PRODUCT))}"
 else
-  echo "warning: JARVIS_KEYMAP_VENDOR/PRODUCT are not set, remapping every" >&2
-  echo "         keyboard. Run 'keymap.sh list' to find yours." >&2
-  MATCH='{}'
+  MATCH=""
 fi
 
 if [ "${1:-on}" = "off" ]; then
+  # Undoing is safe to aim at everything: an empty mapping is the default state.
+  [ -z "$MATCH" ] && MATCH='{}'
   hidutil property --matching "$MATCH" --set '{"UserKeyMapping":[]}' >/dev/null
   echo "keymap off (the key works as itself again)"
-else
-  # hidutil wants the HID page in the number: keyboard page 0x07 shifted up,
-  # plus the usage of the key itself.
-  src_full=$(printf '0x%X' $(( 0x700000000 + SRC )))
-  dst_full=$(printf '0x%X' $(( 0x700000000 + DST )))
-  hidutil property --matching "$MATCH" \
-    --set "{\"UserKeyMapping\":[{\"HIDKeyboardModifierMappingSrc\":$src_full,\"HIDKeyboardModifierMappingDst\":$dst_full}]}" >/dev/null
+  exit 0
+fi
+
+# No keyboard to point at, so there is nothing to remap. Saying so on stdout
+# rather than stderr matters: the daemon copies this line into listener.log,
+# and it used to log "keymap on" for a remap that had never happened.
+if [ -z "$MATCH" ]; then
+  echo "keymap skipped: JARVIS_KEYMAP_VENDOR/PRODUCT are not set in $ENV_FILE."
+  echo "  Run 'bash keymap.sh list' to find your keyboard, or use a key you"
+  echo "  already have - JARVIS_TAP_KEYS in jarvis.env, see 'The key' in README."
+  exit 0
+fi
+
+# hidutil wants the HID page in the number: keyboard page 0x07 shifted up,
+# plus the usage of the key itself.
+src_full=$(printf '0x%X' $(( 0x700000000 + SRC )))
+dst_full=$(printf '0x%X' $(( 0x700000000 + DST )))
+dst_dec=$(( 0x700000000 + DST ))
+
+hidutil property --matching "$MATCH" \
+  --set "{\"UserKeyMapping\":[{\"HIDKeyboardModifierMappingSrc\":$src_full,\"HIDKeyboardModifierMappingDst\":$dst_full}]}" >/dev/null
+
+# hidutil exits 0 even when it matched no device, so the only honest report is
+# reading the property back off the keyboard - it prints the mapping in decimal,
+# whatever base it was given.
+if hidutil property --matching "$MATCH" --get "UserKeyMapping" 2>/dev/null \
+     | grep -q "$dst_dec"; then
   echo "keymap on ($SRC -> $DST -> Jarvis)"
+else
+  echo "keymap failed: no keyboard with VendorID $VENDOR / ProductID $PRODUCT is"
+  echo "  connected, the key was not remapped. 'bash keymap.sh list' shows what is here."
+  exit 1
 fi
