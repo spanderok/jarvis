@@ -327,6 +327,7 @@ The key is worth setting next - see [The key](#the-key).
 | `warning: the claude CLI is not on PATH` | he will listen but cannot answer | install Claude Code, run `claude` once to log in |
 | `Vosk model not found: .../models/...` | the wake model is not there | `bash install.sh models` |
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
+| the badge never appears | it is started by `jarvisd.sh` and by `/assist`, and nothing else | `bash overlay.sh` raises it by hand; `JARVIS_OVERLAY=0` is what turns it off |
 | `keys are dead: <app> has no Input Monitoring` in the log | macOS drops every key press before he sees it | `uv run perm_check.py` prints the link to the right pane; or use `jarvis-key.sh` from Shortcuts, which needs no permission |
 | `keymap skipped` or `keymap failed` in the log | no keyboard was remapped - none is configured, or the configured one is unplugged | normal unless you wanted a remapped key; `bash keymap.sh list`, then fill in `jarvis.env` |
 | he answers with a network voice or a robotic system voice | the local voice failed - a missing model, or the espeak-ng error in the row below | `bash install.sh models`; if the models are there, run `bash say.sh test` by hand and read what piper prints |
@@ -908,7 +909,7 @@ Optional pieces, each independent - ignore what you do not need.
 |---|---|---|
 | `skills/voice-answer` | lets any Claude session speak a short answer aloud | nothing extra; `ffmpeg` for Telegram voice messages |
 | `skills/spotify` | voice control for Spotify | two Keychain entries, see `skills/spotify/SKILL.md` |
-| `overlay.sh` | floating badge showing listening / thinking / talking | nothing |
+| `overlay.sh` | floating badge showing listening / thinking / talking - raised by `jarvisd.sh` and `/assist` on their own | nothing |
 | `status.sh` | menu bar indicator | nothing |
 | `tg_listen.py` | ask him from Telegram, by text or voice message | a bot token and your chat id in the Keychain as `jarvis-telegram-token` and `jarvis-telegram-chat` |
 | `room.sh` | raise a companion session he can hand work to | a Terminal.app window |
