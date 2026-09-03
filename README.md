@@ -27,9 +27,15 @@ and does it, then reports back, out loud, while you are still making coffee.
 ```bash
 git clone https://github.com/spanderok/jarvis ~/.claude/jarvis
 cd ~/.claude/jarvis && bash install.sh     # models, skills, commands - about ten minutes
-# System Settings -> Privacy & Security -> Microphone -> your terminal
+# it ends by naming the permissions macOS has not given yet, and to which app
 bash jarvisd.sh                            # then say "Jarvis"
 ```
+
+The two permissions are granted to **the application you start him from**, which
+is the one thing worth reading twice: run him from an IDE's terminal panel and
+they belong to the IDE, not to Terminal.app. The Microphone is required, Input
+Monitoring is what makes the key work, and `uv run perm_check.py` names both
+along with the app.
 
 That is the whole install; the [step by step](#install) below has the details
 and the things that go wrong.
@@ -58,8 +64,13 @@ one habit is why people keep him on -
 enrolment and he answers you and only you; a colleague leaning into your
 microphone gets a polite refusal.
 
-**One key beats every recognizer.** A spare key means "switch to me": it ends
-your sentence, interrupts him mid-word, or wakes him with no wake word at all.
+**One key beats every recognizer, and it is the right Option key.** That is the
+default, out of the box: press it and he is listening, no wake word. Press it
+while he is talking and he stops mid-word and listens instead - the fastest way
+to interrupt an answer that went the wrong way. It types no character and no
+application binds it, so it costs nothing to leave armed. It needs Input
+Monitoring; see [The key](#the-key) for the version that needs no permission
+at all.
 
 **You teach him new tricks in a config file, not in Python.** "What's playing"
 running a script, "tell the reviewer" typing into a second session, memory of
@@ -79,6 +90,7 @@ wherever it bothers you least; it remembers the spot.*
 - [What it costs your Mac](#what-it-costs-your-mac)
 - [The voice lock - he answers only you](#the-voice-lock---he-answers-only-you)
 - [The key](#the-key)
+- [When he cuts you off, or will not let you finish](#when-he-cuts-you-off-or-will-not-let-you-finish)
 - [Rooms and actions](#rooms-and-actions)
 - [Long-term memory](#long-term-memory)
 - [Languages](#languages) - [when he says a word wrong](#when-he-says-a-word-wrong)
@@ -686,6 +698,61 @@ jarvis-key.sh double       # two presses
 ```
 
 The same thing by hand: `kill -USR1 <pid>` and `kill -USR2 <pid>`.
+
+## When he cuts you off, or will not let you finish
+
+Two numbers decide when a phrase is over, and both are printed for every take.
+`bash why.sh` shows the last of them:
+
+```
+record end: silence, peak 609, start 300, keep 270, noise floor 90, loud frames 21, speech yes
+```
+
+Read it as one sentence: the room hums at 90, anything above **start 300**
+counts as you beginning to speak, anything above **keep 270** counts as you
+still speaking, your phrase peaked at 609, and the take ended because it went
+quiet for the pause below.
+
+**The pause.** How long the quiet has to last before he decides you are done.
+Default 1.5 seconds.
+
+```sh
+JARVIS_SILENCE=2.5              # in jarvis.env; longer if he cuts you off
+```
+
+There is a second, longer pause for when the quiet lands in the *middle* of a
+phrase rather than at its end - he tells the two apart by whether you have
+already paused once in this take - and it defaults to 2.6 seconds
+(`JARVIS_SILENCE_MID`).
+
+Trying a pause out does not need a restart: `tuning.json` next to the daemon is
+re-read every two seconds while he runs, which matters when the listener lives
+inside somebody else's chat session.
+
+```bash
+echo '{"silence_sec": 2.5}' > ~/.claude/jarvis/tuning.json   # takes effect at once
+rm ~/.claude/jarvis/tuning.json                              # back to jarvis.env
+```
+
+**The level.** How loud a frame has to be to count as speech at all. It follows
+the room - the floor is measured continuously - but never drops below a fixed
+minimum, because a floor that adapts all the way down starts hearing a fan.
+
+```sh
+JARVIS_MIN_LEVEL=300            # raise it in a noisy room, lower it if he misses you
+```
+
+`uv run mic_check.py` prints the peak of your own voice and, when it is quiet,
+says which number to set. The rule of thumb is the one in the log line above:
+`JARVIS_MIN_LEVEL` wants to sit between the loudest thing in the room and the
+quietest thing you say.
+
+Three symptoms and the knob each one wants:
+
+- he answers before you finish a sentence -> raise `JARVIS_SILENCE`
+- he keeps the microphone open for seconds after you stop -> lower it
+- he never hears you at all, or hears the room instead of you -> `mic_check.py`,
+  then `JARVIS_MIN_LEVEL`
 
 ## Rooms and actions
 
