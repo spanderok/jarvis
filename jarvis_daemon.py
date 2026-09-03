@@ -1181,10 +1181,11 @@ class Trigger:
             # The log used to answer "keys active" to that, and every press
             # after it looked like a bug in the key rather than a permission.
             if getattr(keyboard.Listener, "IS_TRUSTED", True) is False:
-                log("keys are dead: the app you started him from has no Input "
-                    "Monitoring. System Settings -> Privacy & Security -> Input "
-                    "Monitoring, add it, quit it completely and open it again. "
-                    "jarvis-key.sh from a Shortcut needs no permission at all.")
+                import hostapp
+                log(f"keys are dead: {hostapp.name()} has no Input Monitoring. "
+                    f"Run `uv run {JARVIS_DIR}/perm_check.py` for the link that "
+                    f"opens the right pane. jarvis-key.sh from a Shortcut needs "
+                    f"no permission at all.")
                 return
             self._listeners.append(
                 self._watch_taps(keyboard, taps, dones, offs))

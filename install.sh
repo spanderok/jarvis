@@ -232,14 +232,22 @@ if [ "$STEP" = all ] || [ "$STEP" = keymap ]; then
   fi
 fi
 
+# ---------------------------------------------------------------- permissions
+# Both permissions fail silently - a microphone that hears nothing and keys that
+# are never delivered look exactly like a broken install. So they are asked of
+# macOS here, by name, rather than described in a sentence the reader has to
+# apply to whichever app they happen to be in.
+say "permissions"
+if ! uv run --quiet "$REPO/perm_check.py"; then
+  echo
+  echo "Everything above marked MISSING has to be granted by hand - macOS has"
+  echo "no way for a script to do it."
+fi
+
 say "next"
 cat <<'NEXT'
-1. Give your terminal microphone access:
-   System Settings -> Privacy & Security -> Microphone
-2. For the hotkeys, also give it Input Monitoring:
-   System Settings -> Privacy & Security -> Input Monitoring
-   (or skip it and bind jarvis-key.sh to a shortcut in Shortcuts.app)
-3. Start him:  bash ~/.claude/jarvis/jarvisd.sh
-   Then say his name.
+1. Grant whatever the permission check above says is missing.
+2. Start him:  bash ~/.claude/jarvis/jarvisd.sh
+   Then say his name. The first wake asks which language he should speak.
 NEXT
 echo "   (this build is set to $JARVIS_LANG - the wake word is \"$LANG_FILE\")"
