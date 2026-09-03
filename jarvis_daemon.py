@@ -2603,18 +2603,25 @@ def language_is_chosen() -> bool:
 NEEDS_LANGUAGE = not language_is_chosen()
 
 
-def say_in(code: str, text: str) -> None:
+def say_in(code: str, text: str, backend: str = "") -> None:
     """Speak one sentence in a named language, whatever this process is set to.
 
     say.sh reads the voice out of the locale, so handing it JARVIS_LANG is
     enough - and it is the only way to confirm the choice in the new language
     before the restart that actually adopts it.
+
+    backend="system" asks for the macOS voice instead of the locale's own. The
+    setup question uses it: it is asked before any language has been chosen, so
+    the model for it may not be on disk at all, and `say` is on every Mac.
     """
     if not text:
         return
+    env = dict(os.environ, JARVIS_LANG=code)
+    if backend:
+        env["JARVIS_BACKEND"] = backend
     try:
         subprocess.run(["bash", os.path.join(JARVIS_DIR, "say.sh"), text],
-                       env=dict(os.environ, JARVIS_LANG=code), timeout=120)
+                       env=env, timeout=120)
     except (OSError, subprocess.TimeoutExpired) as e:
         log(f"setup: could not speak the {code} line ({e})")
 
@@ -2643,13 +2650,19 @@ def fetch_models(code: str) -> None:
     happen to be the ones already downloaded, and a few minutes when they are
     not.
     """
+    # The installer prints its whole "here is what to do next" block, and all of
+    # it landed in listener.log - 26 lines of it on the first run of this. Only
+    # what it actually did to the disk is worth keeping.
+    interesting = ("downloading", "already there", "building", "words written",
+                   "voice runtime", "warning", "failed", "not found")
     try:
         r = subprocess.run(["bash", os.path.join(JARVIS_DIR, "install.sh"), "models"],
                            env=dict(os.environ, JARVIS_LANG=code),
                            capture_output=True, text=True, timeout=1800)
-        for line in (r.stdout or "").splitlines():
-            if line.strip() and not line.strip().startswith("#"):
-                log(f"setup: {line.strip()[:120]}")
+        for line in ((r.stdout or "") + "\n" + (r.stderr or "")).splitlines():
+            line = line.strip()
+            if line and any(word in line.lower() for word in interesting):
+                log(f"setup: {line[:120]}")
     except (OSError, subprocess.TimeoutExpired) as e:
         log(f"setup: fetching the {code} models failed ({e})")
 
@@ -2696,7 +2709,7 @@ def choose_language(audio_q, noise_floor: float, trigger: Trigger, engine) -> No
                     continue
             line = lang_mod.fill(setup.language_unclear,
                                  languages=", ".join(names))
-        say_in(setup.lang, line)
+        say_in(setup.lang, line, backend="system")
         chime()
         heard = capture(audio_q, noise_floor, trigger, keep_head=False,
                         wait_sec=WAIT_SPEECH_SEC, verify=False,
@@ -2713,7 +2726,8 @@ def choose_language(audio_q, noise_floor: float, trigger: Trigger, engine) -> No
         # confirms the choice is the first one his new voice ever says, and it
         # should not be read by the old one because a file was missing.
         say_in(setup.lang, lang_mod.fill(setup.language_fetching,
-                                         language=chosen.english_name()))
+                                         language=chosen.english_name()),
+               backend="system")
         fetch_models(code)
         say_in(code, chosen.language_chosen)
         become(code)

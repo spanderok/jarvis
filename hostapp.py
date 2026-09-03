@@ -17,7 +17,16 @@ import subprocess
 
 
 def name(pid: int | None = None) -> str:
-    """The app to grant permissions to, e.g. "Terminal", "iTerm2", "WebStorm"."""
+    """The app to grant permissions to, e.g. "Terminal", "iTerm2", "WebStorm".
+
+    The answer is remembered in the environment, because the process chain is
+    not always there to be walked: a daemon started with nohup is re-parented to
+    launchd the moment its shell exits, and after that the walk finds nothing.
+    Whoever looked first passes the answer on to everything they start.
+    """
+    remembered = os.environ.get("JARVIS_HOST_APP", "").strip()
+    if remembered:
+        return remembered
     pid = pid or os.getpid()
     found = ""
     for _ in range(20):                      # a chain is a dozen deep at most
@@ -39,6 +48,8 @@ def name(pid: int | None = None) -> str:
             pid = int(ppid.strip())
         except ValueError:
             break
+    if found:
+        os.environ["JARVIS_HOST_APP"] = found
     return found or "your terminal"
 
 

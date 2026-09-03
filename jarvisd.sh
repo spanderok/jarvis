@@ -35,4 +35,12 @@ if [ -n "$prev" ] && [ "$prev" != "$$" ] && kill -0 "$prev" 2>/dev/null; then
   done
 fi
 
+# The badge is the only way to see what he is doing without reading a log, and
+# starting it by hand is the step everybody forgets - the first fresh install
+# ran for ten minutes before anybody noticed there was nothing on screen.
+# JARVIS_OVERLAY=0 leaves it down.
+if [ "${JARVIS_OVERLAY:-1}" = "1" ] && ! pgrep -f jarvis_overlay.py >/dev/null 2>&1; then
+  nohup bash "$HOME/.claude/jarvis/overlay.sh" >/dev/null 2>&1 &
+fi
+
 exec uv run --quiet $HOME/.claude/jarvis/jarvis_daemon.py "$@"
