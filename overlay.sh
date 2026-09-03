@@ -7,4 +7,14 @@
 # circle - so the watch is the thing that makes that circle the only live target.
 # JARVIS_OVERLAY_DRAG=0 gives up dragging and removes the watch entirely.
 export JARVIS_OVERLAY_DRAG="${JARVIS_OVERLAY_DRAG:-1}"
+
+# The badge shows a word of the language he speaks, so it needs the same
+# settings file the daemon reads - the corner and the margin live there too.
+ENV_FILE="${JARVIS_ENV:-$HOME/.claude/jarvis/jarvis.env}"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  . "$ENV_FILE"
+  set +a
+fi
+
 exec uv run --quiet $HOME/.claude/jarvis/jarvis_overlay.py

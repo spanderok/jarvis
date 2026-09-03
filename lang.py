@@ -48,8 +48,16 @@ REQUIRED = (
     "name", "letters", "acks", "stop_words", "reset_words",
     "listening", "not_heard", "stopped", "forgotten",
     "stranger_line", "persona", "owner_intro", "owner_intro_anon",
-    "voice_ask", "relay_ask",
+    "voice_ask", "relay_ask", "language_names", "language_chosen",
 )
+
+# The badge shows one word for what he is doing, and it is a word of this
+# language like every other. Missing one would leave the capsule blank.
+REQUIRED_BADGE = ("idle", "listening", "thinking", "speaking")
+
+# Asked once, in English, before anybody has chosen a language - so only the
+# default locale has to carry them. See `setup` below.
+SETUP_ONLY = ("language_ask", "language_unclear", "language_fetching")
 
 # The [say] table: what he says about a room or an action that brought no
 # wording of its own. Every one of these has a call site in the daemon, so a
@@ -100,6 +108,20 @@ class Locale:
     stop_words: frozenset[str] = frozenset()
     reset_words: frozenset[str] = frozenset()
 
+    # --- choosing this language, and showing it on the badge -------------
+    # What you say to pick this language when he asks on the very first wake:
+    # its own name in its own words, plus the English one, because half the
+    # people answering will say "Russian" and half "русский".
+    language_names: tuple[str, ...] = ()
+    language_chosen: str = ""           # confirmation, in this language
+    # The setup dialogue happens before anybody has chosen, so it is English
+    # and only locales/en.toml fills these in.
+    language_ask: str = ""
+    language_unclear: str = ""
+    language_fetching: str = ""         # holds {language}
+    # One word per state for the floating badge - "listening", "слушаю".
+    badge: dict[str, str] = field(default_factory=dict, repr=False)
+
     # --- how he answers ---------------------------------------------------
     persona: str = ""                   # system prompt, holds {owner_intro}
     owner_intro: str = ""               # holds {owner}
@@ -139,6 +161,18 @@ class Locale:
     word_re: re.Pattern = field(default=re.compile(r"[a-z]+"), repr=False)
     strip_re: re.Pattern = field(default=re.compile(r"[^a-z ]"), repr=False)
     script_re: re.Pattern = field(default=re.compile(r"[a-z]", re.I), repr=False)
+
+    def english_name(self) -> str:
+        """What to call this language in the English setup question.
+
+        Taken from `language_names` rather than a field of its own: every
+        locale already lists the English name there, because half the people
+        answering "which language?" answer in English.
+        """
+        for alias in self.language_names:
+            if alias.isascii() and alias.strip():
+                return alias.strip().capitalize()
+        return self.lang.upper()
 
     def owner_line(self, owner: str) -> str:
         """The one sentence that names whose computer this is."""
@@ -194,6 +228,40 @@ def available(root: pathlib.Path | None = None) -> list[str]:
     return sorted(p.stem for p in folder.glob("*.toml"))
 
 
+def match_language(said: str, root: pathlib.Path | None = None) -> str | None:
+    """Which locale an answer to "which language should I speak?" picks.
+
+    The answer arrives from the transcriber, so it is a whole sentence in
+    whatever language the person felt like: "russian please", "давай по-русски".
+    Every locale lists the words that pick it, in its own language and in
+    English, and the longest match wins - so a name that contains another
+    ("british english") cannot be stolen by the shorter one.
+    """
+    said = " " + re.sub(r"[^\w ]+", " ", said.lower(), flags=re.UNICODE) + " "
+    said = re.sub(r"\s+", " ", said)
+    best: tuple[int, str] | None = None
+    for code in available(root):
+        try:
+            loc = load(code, root)
+        except LocaleError:
+            continue                     # a broken locale must not block setup
+        for alias in loc.language_names:
+            alias = alias.strip().lower()
+            if alias and f" {alias} " in said and (best is None or len(alias) > best[0]):
+                best = (len(alias), code)
+    return best[1] if best else None
+
+
+def setup_lines(root: pathlib.Path | None = None) -> Locale:
+    """The locale that speaks the first-run question - always the default one.
+
+    Nobody has chosen a language at that point, and the models on disk after a
+    plain `install.sh` are the default language's, so the question is asked in
+    it and in no other.
+    """
+    return load(DEFAULT_LANG, root)
+
+
 def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
     """Read one locale, or fail loudly enough to fix before he is started."""
     lang = (lang or os.environ.get("JARVIS_LANG") or DEFAULT_LANG).strip().lower()
@@ -220,6 +288,14 @@ def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
         raise LocaleError(f"{src}: [say] is missing {', '.join(missing)}")
     fallbacks = {k: str(v) for k, v in fallbacks.items()}
 
+    badge = data.get("badge", {})
+    if not isinstance(badge, dict):
+        raise LocaleError(f"{src}: [badge] must be a table")
+    missing = [k for k in REQUIRED_BADGE if not str(badge.get(k, "")).strip()]
+    if missing:
+        raise LocaleError(f"{src}: [badge] is missing {', '.join(missing)}")
+    badge = {k: str(v) for k, v in badge.items()}
+
     letters = str(data["letters"])
     script = str(data.get("script") or letters)
     try:
@@ -233,7 +309,8 @@ def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
     text = {k: str(data.get(k, "")) for k in (
         "name", "listening", "not_heard", "stopped", "forgotten",
         "reset_elsewhere", "stranger_line", "persona", "owner_intro",
-        "owner_intro_anon", "voice_ask", "relay_ask", "asr_model",
+        "owner_intro_anon", "voice_ask", "relay_ask", "language_chosen",
+        "language_ask", "language_unclear", "language_fetching", "asr_model",
         "wake_model", "wake_model_url", "tts_backend", "tts_voice",
         "tts_voice_url", "edge_voice", "system_voice")}
 
@@ -273,6 +350,9 @@ def load(lang: str | None = None, root: pathlib.Path | None = None) -> Locale:
         word_re=word_re, strip_re=strip_re, script_re=script_re,
         spoken_swaps=tuple((str(a), str(b)) for a, b in swaps),
         cohort_voices=_as_tuple(data.get("cohort_voices", []), "cohort_voices", src),
+        language_names=tuple(w.lower() for w in
+                             _as_tuple(data["language_names"], "language_names", src)),
+        badge=badge,
         enroll=tuple((str(t["id"]), str(t.get("how", "")), str(t["say"]))
                      for t in takes),
         fallbacks=fallbacks, source=src, **text)
@@ -307,6 +387,13 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "list":
         print("\n".join(available()))
         raise SystemExit(0)
+
+    # `lang.py match "давай по-русски"` -> ru. What the first-run question does
+    # with the answer, exposed so it can be tried without talking to him.
+    if len(sys.argv) > 2 and sys.argv[1] == "match":
+        code = match_language(" ".join(sys.argv[2:]))
+        print(code or "")
+        raise SystemExit(0 if code else 1)
 
     # One field, unquoted, for the shell scripts: `lang.py get tts_voice`.
     if len(sys.argv) > 2 and sys.argv[1] == "get":

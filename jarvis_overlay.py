@@ -1,6 +1,7 @@
 # /// script
 # requires-python = ">=3.10,<3.13"
-# dependencies = ["pyobjc-framework-Cocoa", "pyobjc-framework-Quartz"]
+# dependencies = ["pyobjc-framework-Cocoa", "pyobjc-framework-Quartz",
+#                 "tomli; python_version < '3.11'"]
 # ///
 """Floating status capsule for Jarvis - sits above every window, on every space.
 
@@ -28,8 +29,12 @@ import math
 import os
 import pathlib
 import random
+import sys
 import time
 import warnings
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lang as lang_mod  # noqa: E402
 
 import objc
 
@@ -164,6 +169,54 @@ STATES = {
     "thinking":  ("thinking", (1.00, 0.71, 0.30), 0.82, 2.4,  1.7,  1.4, SWARM_W),
     "speaking":  ("talking", (0.62, 0.91, 1.00), 0.90, 5.0,  6.0,  4.2, WAVE_W),
 }
+
+
+# The state word is a word of the language he is speaking, like everything else
+# he says - locales/<lang>.toml, table [badge]. The English ones stay in STATES
+# above as the last resort: a badge that shows the wrong word is better than a
+# badge that shows none because a locale would not load.
+_badge_cache: dict = {"stamp": None, "words": {}}
+
+
+def spoken_language() -> str:
+    """Which language the daemon is running in, read the way the daemon reads it.
+
+    The last JARVIS_LANG in jarvis.env wins, because that is what `set -a; .` in
+    the shell does with a repeated assignment - and the first-wake setup appends
+    rather than rewrites.
+    """
+    lang = os.environ.get("JARVIS_LANG", "").strip()
+    if lang:
+        return lang
+    try:
+        for line in (JARVIS_DIR / "jarvis.env").read_text(
+                encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith("JARVIS_LANG="):
+                lang = line.partition("=")[2].strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return lang or lang_mod.DEFAULT_LANG
+
+
+def badge_word(state: str) -> str:
+    """The word for this state, re-read whenever jarvis.env changes.
+
+    It changes exactly once for most people - when the language is chosen out
+    loud on the first wake - and the badge should follow without being
+    restarted.
+    """
+    try:
+        stamp = (JARVIS_DIR / "jarvis.env").stat().st_mtime
+    except OSError:
+        stamp = 0.0
+    if _badge_cache["stamp"] != stamp:
+        try:
+            _badge_cache["words"] = dict(lang_mod.load(spoken_language()).badge)
+        except (lang_mod.LocaleError, OSError):
+            _badge_cache["words"] = {}
+        _badge_cache["stamp"] = stamp
+    return _badge_cache["words"].get(state) or STATES[state][0]
 
 
 def daemon_running() -> bool:
@@ -602,7 +655,8 @@ class Capsule(NSObject):
 
     @objc.python_method
     def apply(self, state, owner, waking):
-        label, rgb, glow, dur_a, dur_b, dur_pip, viz_w = STATES[state]
+        _, rgb, glow, dur_a, dur_b, dur_pip, viz_w = STATES[state]
+        label = badge_word(state)
         hue = hue_color(rgb)
 
         text = label_string(label, owner if state != "idle" else "")

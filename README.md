@@ -246,7 +246,11 @@ straight away, and a question asked before the model is here is transcribed by
 a slower one-shot run. From the second question on, an answer takes a few
 seconds.
 
-A short click says he is listening. Say "Jarvis". A chime, then ask something:
+A short click says he is listening. Say "Jarvis". The very first wake is the
+setup one: he asks, in English, which language he should speak, and you answer
+out loud - "English", "Russian", "по-русски". He saves that answer, fetches
+whatever models it needs, and restarts into it. Every wake after that goes
+straight to your question: say "Jarvis", wait for the chime, ask something like
 "what is two times two".
 
 `Ctrl+C` stops him. To run him in the background instead, from any Claude Code
@@ -597,10 +601,16 @@ doing:
 | thinking or talking | interrupt, and listen to what I say next | shut up and wait |
 | idle | wake up, no wake word needed | nothing |
 
+**Out of the box it is the right Option key**, because every Mac keyboard has
+one: it types no character, no application binds it alone, and it sits under the
+thumb. Nothing to install and nothing to configure - press it and he is
+listening. The rest of this section is for people who want a different key.
+
 Three ways to get that key, pick one.
 
 **1. A spare key on your keyboard.** A macro key that sends `End` becomes F18,
-and F18 is the Jarvis key. F18 because F13 is Print Screen on a Mac and
+and F18 is the Jarvis key - `JARVIS_TAP_KEYS="<f18>"` in `jarvis.env` once it
+is remapped. F18 because F13 is Print Screen on a Mac and
 applications do react to it - a macro key mapped to F13 once wiped a cell in a
 spreadsheet. F16..F20 have no system meaning and nothing binds them.
 
@@ -633,16 +643,17 @@ uv run probe_key.py        # press the key, it prints the name to use
 ```
 
 ```sh
-JARVIS_TAP_KEYS="<f13>"    # switch to me
-JARVIS_DONE_KEYS="<alt_r>" # "answer now", only while he is listening
-JARVIS_OFF_KEYS="<esc>"    # shut up and wait
+JARVIS_TAP_KEYS="<f13>"    # switch to me - the default is <alt_r>
+JARVIS_DONE_KEYS="<space>" # "answer now" only, never wakes him; empty by default
+JARVIS_OFF_KEYS="<esc>"    # shut up and wait - the default
 ```
 
-The defaults are the right Option key and Escape. The daemon does not swallow
-key presses, so a "done" key that prints a character - space was tried - also
-types that character into whatever window is in front. Right Option prints
-nothing and no application binds it alone; Escape only acts while he is busy, so
-pressing it in an editor never touches him.
+The defaults are the right Option key and Escape. A separate "answer now" key is
+for people who would rather not have one key do everything - the tap key already
+ends a take. The daemon does not swallow key presses, so a key that prints a
+character - space was tried - also types that character into whatever window is
+in front. Escape only acts while he is busy, so pressing it in an editor never
+touches him.
 
 **3. No key at all.** If you would rather not grant Input Monitoring, bind
 `jarvis-key.sh` to a keyboard shortcut in Shortcuts.app (Run Shell Script). It
@@ -736,12 +747,23 @@ context, never the answer. Check yours with
 
 ## Languages
 
+**He asks, the first time you wake him.** A fresh install has no language, only
+a default, so the first "Jarvis" is answered with one question in English -
+which language should I speak? Say "Russian", or "по-русски", and he saves the
+answer in `jarvis.env`, fetches the models that language needs, and comes back
+speaking it. It happens once; after that the question never returns.
+
+You can skip the question by choosing before the first start: put
+`JARVIS_LANG=ru` in `jarvis.env` and run `bash install.sh models`.
+
 `JARVIS_LANG=en` is the default; `JARVIS_LANG=ru` is the other one that ships.
 A language is one file in `locales/`, holding everything he says and listens for:
 
 - the wake word, and the forms a small recognizer mangles it into
 - the stop words, the acknowledgements, the line for a stranger
 - the persona prompt that gives him his manner
+- the words on the badge - `listening`, `thinking`, or `слушаю`, `думаю`
+- the names you can call the language when he asks which one to speak
 - the models that can handle it - the wake recognizer, the transcriber, the voice
 
 The models come from the locale so that a prompt in one language cannot end up
