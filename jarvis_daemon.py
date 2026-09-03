@@ -1176,6 +1176,16 @@ class Trigger:
             return
         try:
             from pynput import keyboard
+            # Without Input Monitoring macOS hands the listener no events at
+            # all, and pynput says so once on stderr and then runs happily.
+            # The log used to answer "keys active" to that, and every press
+            # after it looked like a bug in the key rather than a permission.
+            if getattr(keyboard.Listener, "IS_TRUSTED", True) is False:
+                log("keys are dead: the app you started him from has no Input "
+                    "Monitoring. System Settings -> Privacy & Security -> Input "
+                    "Monitoring, add it, quit it completely and open it again. "
+                    "jarvis-key.sh from a Shortcut needs no permission at all.")
+                return
             self._listeners.append(
                 self._watch_taps(keyboard, taps, dones, offs))
             log(f"keys active: tap {', '.join(sorted(taps))} | "

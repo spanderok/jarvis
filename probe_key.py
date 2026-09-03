@@ -25,6 +25,13 @@ MODS = {
 }
 held: list[str] = []
 
+if getattr(keyboard.Listener, "IS_TRUSTED", True) is False:
+    print("This terminal has no Input Monitoring permission, so no key press\n"
+          "will ever reach this script. System Settings -> Privacy & Security\n"
+          "-> Input Monitoring, add the app this is running in, quit it\n"
+          "completely and open it again.")
+    raise SystemExit(1)
+
 print("Press the key you want (M5, F13, whatever). Esc quits.\n")
 
 
