@@ -40,6 +40,50 @@ along with the app.
 That is the whole install; the [step by step](#install) below has the details
 and the things that go wrong.
 
+## What leaves your Mac, exactly
+
+Jarvis is ears and a mouth. He has no brain, no account, no server and no data
+of his own - the answer comes from the `claude` CLI that is already on your
+machine, under your own login and your own terms.
+
+| | Where it happens |
+|---|---|
+| hearing the wake word | your Mac, Vosk, offline |
+| turning speech into text | your Mac, parakeet-mlx, offline |
+| turning the answer into speech | your Mac, piper or vosk-tts, offline |
+| **answering the question** | **the `claude` CLI you already use - the same place your typed questions go** |
+
+Not one byte of audio is uploaded anywhere. What crosses the line is the text of
+your question and the text of the answer, and it crosses it exactly where it
+would have crossed it if you had typed the same question into Claude Code
+yourself.
+
+**So he cannot leak what you would not leak by typing.** That is worth spelling
+out, because it is the first thing people worry about:
+
+- **He reads nothing on his own.** No files, no chats, no repositories. The
+  standalone daemon runs `claude -p` in an empty folder with
+  `--strict-mcp-config` (no MCP servers at all) and `--allowedTools WebSearch
+  WebFetch` - it is a headless session, so any tool not on that list is refused
+  rather than asked about. `JARVIS_MCP=1` is how you opt in to your MCP servers,
+  and `JARVIS_TOOLS` to more tools; both are off until you turn them on.
+- **`/assist` adds nothing either.** It hands the words to the session you were
+  already working in - the same tools, the same MCP servers, the same CLAUDE.md,
+  the same permission prompts. A session told never to push to `main` will not
+  push to `main` because you asked out loud. The microphone is another keyboard,
+  not another set of rights.
+- **Which means the policy question is about Claude Code, not about Jarvis.** If
+  your workplace is fine with you using Claude Code on a repository, saying the
+  same thing out loud changes nothing. If it is not, Jarvis does not make it
+  fine - and adding a microphone to a session that can read your work chat is a
+  decision you make when you attach that session, not one he makes for you.
+
+Two things to know rather than assume: `listener.log` keeps a transcript of what
+was heard, on your disk and in `.gitignore`; and the voice fallback for a missing
+local model is Microsoft's `edge-tts`, which sends the sentence to be spoken over
+the network - it never runs unless the local voice is gone, and
+`JARVIS_BACKEND=system` removes even that possibility.
+
 ## Why you would want him
 
 **He is ears and a mouth for the agent you already have.** Jarvis has no brain
@@ -83,6 +127,7 @@ wherever it bothers you least; it remembers the spot.*
 
 ## Contents
 
+- [What leaves your Mac, exactly](#what-leaves-your-mac-exactly)
 - [One exchange, end to end](#one-exchange-end-to-end)
 - [Install](#install) - [before you start](#before-you-start), [four steps](#step-1---get-the-code), [check](#check-that-everything-is-in-place), [if something is off](#if-something-is-off), [Russian](#russian), [updating](#updating), [uninstall](#uninstall)
 - [Your agent's ears and mouth](#your-agents-ears-and-mouth)
@@ -936,6 +981,10 @@ security add-generic-password -U -s jarvis-telegram-chat  -a "$USER" -w '<your c
 ```
 
 ## Privacy
+
+What crosses the line and what does not is on the first screen -
+[What leaves your Mac, exactly](#what-leaves-your-mac-exactly). This section is
+about what stays here.
 
 Everything stays on the machine, and the repository is built to keep it that way.
 `.gitignore` excludes the voice print, the enrolment recordings, the logs (they
