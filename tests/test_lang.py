@@ -291,6 +291,8 @@ def test_the_default_locale_carries_the_setup_question():
     ("english", "en"),
     ("let us speak English then", "en"),
     ("по русски", "ru"),
+    ("давай по-английски", "en"),
+    ("хочу на английском", "en"),
     ("what time is it", None),
     ("", None),
 ])
