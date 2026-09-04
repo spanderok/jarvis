@@ -39,6 +39,15 @@ if ! have uv; then
   exit 1
 fi
 have claude || echo "warning: the claude CLI is not on PATH - Jarvis needs it to answer." >&2
+# ffmpeg is not an extra: the transcriber reads every recording through it, and
+# without it a fresh install hears its name, records the question and gets an
+# empty transcript back for ever - the reason sits in one line of the log.
+if ! have ffmpeg; then
+  echo "ffmpeg is missing. The transcriber reads every recording through it, so" >&2
+  echo "without it he hears his name and then understands nothing at all:" >&2
+  echo "  brew install ffmpeg" >&2
+  exit 1
+fi
 
 # Load jarvis.env early: JARVIS_LANG lives there, and it decides what gets
 # downloaded below.
