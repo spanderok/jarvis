@@ -1185,7 +1185,10 @@ class Trigger:
                 log(f"keys are dead: {hostapp.name()} has no Input Monitoring. "
                     f"Run `uv run {JARVIS_DIR}/perm_check.py` for the link that "
                     f"opens the right pane. jarvis-key.sh from a Shortcut needs "
-                    f"no permission at all.")
+                    f"no permission at all. Until then there is no key to quiet "
+                    f"him: `bash {JARVIS_DIR}/jarvis-key.sh double` sends him "
+                    f"back to the wake word, `pkill -f jarvis_daemon.py` shuts "
+                    f"him down.")
                 return
             self._listeners.append(
                 self._watch_taps(keyboard, taps, dones, offs))

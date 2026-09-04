@@ -185,23 +185,27 @@ text, so an agent can drive it and read the result.
 You need a Mac with Apple silicon (M1 or later) running a recent macOS. Intel
 Macs are out: the transcriber runs on MLX, which is Apple silicon only.
 
-Three tools have to be on the machine already. Check each one in a terminal;
+Four tools have to be on the machine already. Check each one in a terminal;
 every command should print a version, not "command not found".
 
 ```bash
 brew --version      # Homebrew            - https://brew.sh
 uv --version        # uv, a Python runner - brew install uv
 claude --version    # Claude Code CLI     - https://claude.com/claude-code
+ffmpeg -version     # ffmpeg              - brew install ffmpeg
 ```
 
 `claude` has to be logged in as well: run `claude` once by hand, and if it asks
 you to sign in, do that first.
 
-Two more things are optional:
+`ffmpeg` is how the transcriber reads a recording. Without it he still hears his
+name and still records the question, but every transcript comes back empty, so
+nothing ever happens and the only trace is one line in the log: `!ERR FFmpeg is
+not installed or not in your PATH`. It also carries the network voice that fills
+in when a local model is missing, and Telegram voice messages.
 
-- `ffmpeg` (`brew install ffmpeg`) - only for two extras: the network voice that
-  fills in when a local model is missing, and Telegram voice messages. Without it
-  the offline voices work as usual.
+One more thing, and it is not something you install:
+
 - Python. You do not install one. Every script here declares its own
   dependencies in a header, `uv` reads that header and fetches a Python 3.12 plus
   the packages on the first run. The Python that ships with macOS (3.9) is never
@@ -331,7 +335,10 @@ straight to your question: say "Jarvis", wait for the chime, ask something like
 "what is two times two".
 
 `Ctrl+C` stops him. To run him in the background instead, from any Claude Code
-session type `/jarvis-daemon`.
+session type `/jarvis-daemon` - and then `Ctrl+C` is gone, so the way to stop
+that one is `pkill -f jarvis_daemon.py` from any terminal. Worth knowing before
+the first start: the key that would otherwise quiet him needs a permission
+granted in Step 3, and until it is granted he cannot be stopped by hand.
 
 ### Check that everything is in place
 
@@ -370,10 +377,12 @@ The key is worth setting next - see [The key](#the-key).
 |---|---|---|
 | `uv is missing` | the installer stopped before doing anything | `brew install uv`, run `bash install.sh` again |
 | `warning: the claude CLI is not on PATH` | he will listen but cannot answer | install Claude Code, run `claude` once to log in |
+| `ffmpeg is missing` from the installer, or `!ERR FFmpeg is not installed or not in your PATH` in the log | the transcriber cannot read the recording, so every question comes back empty and no answer is ever attempted | `brew install ffmpeg`, then start him again |
 | `Vosk model not found: .../models/...` | the wake model is not there | `bash install.sh models` |
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
 | the badge never appears | it is started by `jarvisd.sh` and by `/assist`, and nothing else | `bash overlay.sh` raises it by hand; `JARVIS_OVERLAY=0` is what turns it off |
 | `keys are dead: <app> has no Input Monitoring` in the log | macOS drops every key press before he sees it | `uv run perm_check.py` prints the link to the right pane; or use `jarvis-key.sh` from Shortcuts, which needs no permission |
+| he is listening, the key does nothing, and you want him to stop now | the key is the usual way out and it is the one thing a missing permission takes away | `bash ~/.claude/jarvis/jarvis-key.sh double` sends him back to the wake word, `pkill -f jarvis_daemon.py` shuts him down - neither needs any permission |
 | `keymap skipped` or `keymap failed` in the log | no keyboard was remapped - none is configured, or the configured one is unplugged | normal unless you wanted a remapped key; `bash keymap.sh list`, then fill in `jarvis.env` |
 | he answers with a network voice or a robotic system voice | the local voice failed - a missing model, or the espeak-ng error in the row below | `bash install.sh models`; if the models are there, run `bash say.sh test` by hand and read what piper prints |
 | the first answer takes a minute or more | the 2.3 GB transcriber is downloading | wait it out once |
@@ -682,8 +691,13 @@ doing:
 
 **Out of the box it is the right Option key**, because every Mac keyboard has
 one: it types no character, no application binds it alone, and it sits under the
-thumb. Nothing to install and nothing to configure - press it and he is
-listening. The rest of this section is for people who want a different key.
+thumb. Nothing to install and nothing to configure - but it does need the one
+permission, Input Monitoring, granted to the application you start him from (see
+[Step 3](#step-3---two-permissions-in-system-settings)). Without it macOS drops
+every press before he sees it, and the key looks broken rather than unpermitted;
+`uv run perm_check.py` says which it is. Option 3 below is the same key with no
+permission at all. The rest of this section is for people who want a different
+key.
 
 Three ways to get that key, pick one.
 
