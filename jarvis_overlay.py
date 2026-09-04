@@ -24,11 +24,14 @@ Env:
   JARVIS_OVERLAY_IDLE    0 to hide the capsule while idle (default 1 - always on)
   JARVIS_OVERLAY_MARGIN  gap from the screen edge, default 104
   JARVIS_OVERLAY_DRAG    1 - draggable (costs click-through), 0 - clicks pass through
+  JARVIS_OVERLAY_CLICK   0 - a click on the capsule does nothing (default 1 - a
+                         click is one press of the key, a double click is two)
 """
 import math
 import os
 import pathlib
 import random
+import signal
 import sys
 import time
 import warnings
@@ -42,7 +45,7 @@ warnings.filterwarnings("ignore", category=objc.ObjCPointerWarning)
 
 from AppKit import (NSApplication, NSApplicationActivationPolicyAccessory, NSColor,
                     NSFont, NSFontAttributeName, NSForegroundColorAttributeName,
-                    NSKernAttributeName, NSPanel, NSScreen,
+                    NSKernAttributeName, NSPanel, NSScreen, NSView,
                     NSWindowCollectionBehaviorCanJoinAllSpaces,
                     NSWindowCollectionBehaviorFullScreenAuxiliary,
                     NSWindowCollectionBehaviorStationary,
@@ -78,6 +81,24 @@ SHOW_IDLE = os.environ.get("JARVIS_OVERLAY_IDLE", "1") == "1"
 # high for the owner - they asked for 40 points lower twice (history of 20.08)
 MARGIN = int(os.environ.get("JARVIS_OVERLAY_MARGIN", "104"))
 DRAGGABLE = os.environ.get("JARVIS_OVERLAY_DRAG") == "1"
+# The capsule is the key for people who do not have one: the key needs Input
+# Monitoring, a fresh install does not have it, and that is exactly the moment
+# somebody wants him to stop and has nothing to press. So the window catches the
+# mouse whenever the capsule is on screen, not only when it is draggable, and a
+# click means what a press of the key means - see press_daemon.
+CLICKABLE = os.environ.get("JARVIS_OVERLAY_CLICK", "1") == "1"
+# A click that travelled further than this was somebody moving the badge, not
+# pressing it. 3 points, picked rather than measured: a steady hand moves one or
+# two points between press and release, and the capsule itself is 52.
+CLICK_SLOP = 3.0
+# Two clicks closer together than this are one double click, exactly as two key
+# presses are. The daemon's own window, so the badge and the key agree.
+DOUBLE_TAP_SEC = float(os.environ.get("JARVIS_DOUBLE_TAP", "0.4"))
+# Once the capsule catches the mouse for the click, dragging it costs nothing
+# extra - the same press either moves it or switches him over, told apart by how
+# far it travelled. So the badge is draggable whenever it is clickable, and
+# JARVIS_OVERLAY_DRAG=1 stays as the way to have the drag with the click off.
+MOUSE_ON = DRAGGABLE or CLICKABLE
 # The window is 400x108 while the capsule inside it is 52 tall and rarely wider
 # than 290 - the rest is transparent room for the glow. With dragging on, that
 # whole rectangle used to swallow clicks meant for whatever is underneath. So the
@@ -165,11 +186,19 @@ SPEAK_LEVEL_FILE = JARVIS_DIR / "speak_level"
 STATES = {
     # state: (label, hue rgb, glow 0..1, ring_a s, ring_b s, pip s, viz width)
     "idle":      ("asleep",  (0.49, 0.56, 0.68), 0.12, 26.0, 19.0, 4.2, 0),
+    # switched off by a click: no wake word is heard until the next one. It has
+    # to stay on screen and it has to look different from idle, or the click has
+    # no visible effect and there is nothing left to click to bring him back.
+    "asleep":    ("off",     (0.42, 0.44, 0.50), 0.00, 90.0, 70.0, 9.0, 0),
     "listening": ("listening", (0.32, 0.86, 1.00), 1.00, 7.0,  6.0,  4.2, WAVE_W),
     "thinking":  ("thinking", (1.00, 0.71, 0.30), 0.82, 2.4,  1.7,  1.4, SWARM_W),
     "speaking":  ("talking", (0.62, 0.91, 1.00), 0.90, 5.0,  6.0,  4.2, WAVE_W),
 }
 
+
+# Both of these draw the same small circle with no label and no visualiser; the
+# difference is the colour and how dim it is.
+COLLAPSED_STATES = ("idle", "asleep")
 
 # The state word is a word of the language he is speaking, like everything else
 # he says - locales/<lang>.toml, table [badge]. The English ones stay in STATES
@@ -237,6 +266,92 @@ def daemon_running() -> bool:
     return False
 
 
+def daemon_pid() -> int:
+    """The daemon a click should signal: the standalone one, or the /assist listener."""
+    for name in ("daemon.pid", "listener.pid"):
+        try:
+            pid = int((JARVIS_DIR / name).read_text().strip())
+        except (OSError, ValueError):
+            continue
+        try:
+            os.kill(pid, 0)
+            return pid
+        except ProcessLookupError:
+            continue
+        except PermissionError:
+            return pid
+    return 0
+
+
+def press_daemon() -> None:
+    """A click is one press of the key, and a double click is two.
+
+    The same meanings, because the badge is the key for people who do not have
+    one: talking or thinking - be quiet and listen to me; listening - that was
+    the whole question; idle - wake up. Twice in a row drops it entirely.
+
+    The daemon decides what a press means from its own state, so the capsule only
+    has to say which press it was: SIGUSR1 for one, SIGUSR2 for two. The window
+    of DOUBLE_TAP_SEC is read here rather than there for the same reason it is
+    read there - the second click has to be recognised where the clicks arrive.
+    """
+    pid = daemon_pid()
+    if not pid:
+        print("capsule: clicked, but no daemon is running", flush=True)
+        return
+    now = time.monotonic()
+    twice = now - _last_click[0] <= DOUBLE_TAP_SEC
+    _last_click[0] = now
+    try:
+        os.kill(pid, signal.SIGUSR2 if twice else signal.SIGUSR1)
+        print(f"capsule: {'double ' if twice else ''}click -> daemon {pid}", flush=True)
+    except OSError as e:
+        print(f"capsule: could not signal the daemon ({e})", flush=True)
+
+
+# Where the mouse was when the button went down, so a drag can be told from a
+# click. One window, one button, one press at a time - a module-level slot is
+# enough and it keeps the ObjC subclass free of python state.
+_press_at = [None]
+# When the last click landed, for telling a double click from two single ones.
+_last_click = [0.0]
+
+
+class CapsuleView(NSView):
+    """The badge's content view - it exists to turn a click into an off switch.
+
+    The window only catches the mouse while the cursor is over the capsule (see
+    hit_), so whatever arrives here was aimed at Jarvis and nothing else.
+    """
+
+    def acceptsFirstMouse_(self, _ev):
+        # the badge never becomes the active window, so without this the first
+        # click would only be spent bringing it forward
+        return True
+
+    def mouseDown_(self, ev):
+        _press_at[0] = NSEvent.mouseLocation()
+        if MOUSE_ON:
+            # this returns only when the button comes back up, and it is what
+            # moves the window now: with a view handling mouseDown, the window's
+            # own movable-by-background drag never gets the event.
+            self.window().performWindowDragWithEvent_(ev)
+            self.click_if_still()
+
+    def mouseUp_(self, _ev):
+        if not MOUSE_ON:      # no drag session ran, so the release decides
+            self.click_if_still()
+
+    @objc.python_method
+    def click_if_still(self):
+        down, _press_at[0] = _press_at[0], None
+        if down is None or not CLICKABLE:
+            return
+        up = NSEvent.mouseLocation()
+        if abs(up.x - down.x) + abs(up.y - down.y) <= CLICK_SLOP:
+            press_daemon()
+
+
 def hue_color(rgb, alpha=1.0):
     r, g, b = rgb
     return NSColor.colorWithCalibratedRed_green_blue_alpha_(r, g, b, alpha).CGColor()
@@ -294,13 +409,17 @@ class Capsule(NSObject):
         self.panel.setBackgroundColor_(NSColor.clearColor())
         self.panel.setHasShadow_(False)          # the glow layer is the shadow
         self.panel.setIgnoresMouseEvents_(True)   # turned off when the cursor is on the capsule
-        self.panel.setMovableByWindowBackground_(DRAGGABLE)
+        # Dragging is done by CapsuleView through performWindowDragWithEvent_,
+        # because a view that handles mouseDown takes the event away from the
+        # window's own background drag. Leaving both on would move it twice.
+        self.panel.setMovableByWindowBackground_(False)
         self.panel.setCollectionBehavior_(
             NSWindowCollectionBehaviorCanJoinAllSpaces
             | NSWindowCollectionBehaviorStationary
             | NSWindowCollectionBehaviorFullScreenAuxiliary)
 
-        root = self.panel.contentView()
+        root = CapsuleView.alloc().initWithFrame_(NSMakeRect(0, 0, WIN_W, WIN_H))
+        self.panel.setContentView_(root)
         root.setWantsLayer_(True)
         self.build_layers(root.layer())
 
@@ -327,7 +446,7 @@ class Capsule(NSObject):
         self.cap_w = COLLAPSED_W  # the capsule's current width, for cursor hit tests
         self.spot = None
         self.right_anchored = CORNER.endswith("r")
-        if DRAGGABLE:
+        if MOUSE_ON:
             try:
                 x, y = POS_FILE.read_text().split()
                 self.spot = (float(x), float(y))
@@ -557,7 +676,7 @@ class Capsule(NSObject):
 
     @objc.python_method
     def remember_spot(self):
-        if not DRAGGABLE:
+        if not MOUSE_ON:
             return
         f = self.panel.frame()
         edge = f.origin.x + f.size.width if self.right_anchored else f.origin.x
@@ -647,7 +766,9 @@ class Capsule(NSObject):
                 self.panel.orderOut_(None)
                 self.shown = False
             return
-        self.apply(state, owner, waking=(was in (None, "idle") and state != "idle"))
+        self.apply(state, owner,
+                   waking=(was in (None, "idle", "asleep")
+                           and state not in COLLAPSED_STATES))
         if not self.shown:
             self.place()
             self.panel.orderFrontRegardless()
@@ -659,9 +780,10 @@ class Capsule(NSObject):
         label = badge_word(state)
         hue = hue_color(rgb)
 
-        text = label_string(label, owner if state != "idle" else "")
-        text_w = math.ceil(text.size().width) if state != "idle" else 0
-        width = COLLAPSED_W if state == "idle" else (
+        collapsed = state in COLLAPSED_STATES
+        text = label_string(label, owner if not collapsed else "")
+        text_w = math.ceil(text.size().width) if not collapsed else 0
+        width = COLLAPSED_W if collapsed else (
             PAD + CORE + GAP_LABEL + text_w + GAP_VIZ + viz_w + PAD_RIGHT + PAD)
 
         CATransaction.begin()
@@ -680,8 +802,11 @@ class Capsule(NSObject):
         for l in self.swarm_links:
             l.setStrokeColor_(hue)
         self.capsule.setBorderColor_(
-            NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.06 if state == "idle" else 0.10).CGColor())
-        self.capsule.setOpacity_(0.58 if state == "idle" else 1.0)
+            NSColor.colorWithCalibratedWhite_alpha_(1.0, 0.06 if collapsed else 0.10).CGColor())
+        # off is dimmer than asleep on purpose: at a glance the difference between
+        # "waiting for his name" and "not listening at all" has to be visible.
+        self.capsule.setOpacity_(0.40 if state == "asleep"
+                                 else 0.58 if state == "idle" else 1.0)
         self.glow.setShadowColor_(hue)
         self.glow.setShadowOpacity_(glow * 0.5)
         self.glow.setShadowRadius_(4 + glow * 6)
@@ -700,7 +825,7 @@ class Capsule(NSObject):
         self.label.setString_(text)
         self.label.setFrame_(CGRectMake(PAD + CORE + GAP_LABEL,
                                         (CAPSULE_H - 15) / 2.0, max(text_w, 1), 15))
-        self.label.setOpacity_(0.0 if state == "idle" else 1.0)
+        self.label.setOpacity_(0.0 if collapsed else 1.0)
         viz_x = PAD + CORE + GAP_LABEL + text_w + GAP_VIZ
         self.viz.setFrame_(CGRectMake(viz_x, (CAPSULE_H - VIZ_H) / 2.0, viz_w, VIZ_H))
         self.swarm.setFrame_(CGRectMake(viz_x, (CAPSULE_H - VIZ_H) / 2.0, viz_w, VIZ_H))
@@ -732,7 +857,7 @@ class Capsule(NSObject):
 
         if state == "speaking":
             self.speak_started = time.monotonic()
-        if state == "idle":
+        if collapsed:
             self.stop_bars()
         else:
             self.layout_bars(viz_w)
@@ -869,7 +994,7 @@ class Capsule(NSObject):
 
     def hit_(self, _timer):
         """Catch the mouse only over the capsule, let the shadow area through."""
-        if not DRAGGABLE or not self.shown:
+        if not MOUSE_ON or not self.shown:
             if self.catching:
                 self.panel.setIgnoresMouseEvents_(True)
                 self.catching = False
@@ -993,9 +1118,10 @@ app.setActivationPolicy_(NSApplicationActivationPolicyAccessory)
 capsule = Capsule.alloc().init()
 NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
     0.25, capsule, "poll:", None, True)
-if DRAGGABLE:
-    # only armed when dragging is wanted: with the window click-through from the
-    # start there is nothing to switch, and no reason to wake up for the cursor
+if MOUSE_ON:
+    # armed whenever the badge is meant to react to the mouse at all - dragging
+    # it, or clicking it to switch him off. With neither wanted the window stays
+    # click-through and there is no reason to wake up for the cursor.
     NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
         HIT_POLL, capsule, "hit:", None, True)
 print("Jarvis overlay (capsule) running. Ctrl+C to stop.")
