@@ -53,7 +53,8 @@ from AppKit import (NSApplication, NSApplicationActivationPolicyAccessory, NSCol
                     NSWindowStyleMaskNonactivatingPanel)
 from AppKit import NSEvent
 from AppKit import NSApplicationDidChangeScreenParametersNotification, NSNotificationCenter
-from Foundation import (NSAttributedString, NSMakeRect, NSMutableAttributedString,
+from Foundation import (NSAttributedString, NSMakePoint, NSMakeRect,
+                        NSMutableAttributedString,
                         NSObject, NSTimer)
 from Quartz import (CABasicAnimation, CAGradientLayer, CAKeyframeAnimation, CALayer,
                     CAMediaTimingFunction, CAShapeLayer, CATextLayer, CATransaction,
@@ -315,6 +316,8 @@ def press_daemon() -> None:
 _press_at = [None]
 # When the last click landed, for telling a double click from two single ones.
 _last_click = [0.0]
+# Where the window was when the button went down, so a drag can move it from there.
+_window_at = [None]
 
 
 class CapsuleView(NSView):
@@ -329,22 +332,30 @@ class CapsuleView(NSView):
         # click would only be spent bringing it forward
         return True
 
-    def mouseDown_(self, ev):
+    def mouseDown_(self, _ev):
         _press_at[0] = NSEvent.mouseLocation()
-        if MOUSE_ON:
-            # this returns only when the button comes back up, and it is what
-            # moves the window now: with a view handling mouseDown, the window's
-            # own movable-by-background drag never gets the event.
-            self.window().performWindowDragWithEvent_(ev)
-            self.click_if_still()
+        f = self.window().frame()
+        _window_at[0] = (f.origin.x, f.origin.y)
+
+    def mouseDragged_(self, _ev):
+        """The badge follows the cursor, one to one.
+
+        performWindowDragWithEvent_ was doing this and it looked right, but it
+        hands the drag to AppKit and returns at once instead of when the button
+        comes back up - so the press was judged a click while the cursor had not
+        moved yet, and every drag also switched him over. Moving the window here
+        keeps the whole press in one place: the release decides.
+        """
+        down, start = _press_at[0], _window_at[0]
+        if down is None or start is None:
+            return
+        now = NSEvent.mouseLocation()
+        self.window().setFrameOrigin_(
+            NSMakePoint(start[0] + now.x - down.x, start[1] + now.y - down.y))
 
     def mouseUp_(self, _ev):
-        if not MOUSE_ON:      # no drag session ran, so the release decides
-            self.click_if_still()
-
-    @objc.python_method
-    def click_if_still(self):
         down, _press_at[0] = _press_at[0], None
+        _window_at[0] = None
         if down is None or not CLICKABLE:
             return
         up = NSEvent.mouseLocation()
