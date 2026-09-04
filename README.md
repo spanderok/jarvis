@@ -123,7 +123,10 @@ file. English and Russian in the box; a third language is one more text file.
 
 *The badge above (`overlay.sh`) floats over every window and shows what he is
 doing and which session holds the microphone - here, one named `agent`. Drag it
-wherever it bothers you least; it remembers the spot.*
+wherever it bothers you least; it remembers the spot. **A click on it is a press
+of the key** - shut up and listen to me, that was my whole question, or wake up,
+depending on what he is doing; twice in a row drops it entirely. The badge needs
+no macOS permission, which makes it the way to reach him that always works.*
 
 ## Contents
 
@@ -382,7 +385,7 @@ The key is worth setting next - see [The key](#the-key).
 | the daemon is up, you talk, nothing happens | the microphone does not reach the terminal | `uv run mic_check.py`; grant Microphone to the terminal app, restart it |
 | the badge never appears | it is started by `jarvisd.sh` and by `/assist`, and nothing else | `bash overlay.sh` raises it by hand; `JARVIS_OVERLAY=0` is what turns it off |
 | `keys are dead: <app> has no Input Monitoring` in the log | macOS drops every key press before he sees it | `uv run perm_check.py` prints the link to the right pane; or use `jarvis-key.sh` from Shortcuts, which needs no permission |
-| he is listening, the key does nothing, and you want him to stop now | the key is the usual way out and it is the one thing a missing permission takes away | `bash ~/.claude/jarvis/jarvis-key.sh double` sends him back to the wake word, `pkill -f jarvis_daemon.py` shuts him down - neither needs any permission |
+| he is listening, the key does nothing, and you want him to stop now | the key is the usual way out and it is the one thing a missing permission takes away | click the badge twice - the same as two presses, he drops everything; from a terminal, `bash ~/.claude/jarvis/jarvis-key.sh double` does it too and `pkill -f jarvis_daemon.py` shuts him down - none of the three needs any permission |
 | `keymap skipped` or `keymap failed` in the log | no keyboard was remapped - none is configured, or the configured one is unplugged | normal unless you wanted a remapped key; `bash keymap.sh list`, then fill in `jarvis.env` |
 | he answers with a network voice or a robotic system voice | the local voice failed - a missing model, or the espeak-ng error in the row below | `bash install.sh models`; if the models are there, run `bash say.sh test` by hand and read what piper prints |
 | the first answer takes a minute or more | the 2.3 GB transcriber is downloading | wait it out once |
@@ -698,6 +701,12 @@ every press before he sees it, and the key looks broken rather than unpermitted;
 `uv run perm_check.py` says which it is. Option 3 below is the same key with no
 permission at all. The rest of this section is for people who want a different
 key.
+
+**The badge is the key too.** One click on the capsule means exactly what one
+press means in the table above, and a double click means two presses - the
+daemon decides from its own state, so it is the same behaviour, not a copy of
+it. Nothing to set up and no permission needed, which makes it the way to stop
+him while the key is not working yet.
 
 Three ways to get that key, pick one.
 

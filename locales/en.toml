@@ -186,3 +186,5 @@ idle = "asleep"
 listening = "listening"
 thinking = "thinking"
 speaking = "talking"
+# switched off by a click on the badge - he hears nothing at all until the next one
+asleep = "off"
