@@ -1176,12 +1176,15 @@ class Trigger:
             return
         try:
             from pynput import keyboard
+            import hostapp
             # Without Input Monitoring macOS hands the listener no events at
             # all, and pynput says so once on stderr and then runs happily.
             # The log used to answer "keys active" to that, and every press
             # after it looked like a bug in the key rather than a permission.
-            if getattr(keyboard.Listener, "IS_TRUSTED", True) is False:
-                import hostapp
+            # Asked of macOS and not of pynput: its Listener.IS_TRUSTED is
+            # False until a listener has started, so it condemned every key on
+            # a machine that had the permission all along.
+            if hostapp.can_watch_keys() == "MISSING":
                 log(f"keys are dead: {hostapp.name()} has no Input Monitoring. "
                     f"Run `uv run {JARVIS_DIR}/perm_check.py` for the link that "
                     f"opens the right pane. jarvis-key.sh from a Shortcut needs "

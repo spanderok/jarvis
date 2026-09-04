@@ -48,13 +48,13 @@ def microphone() -> tuple[str, str]:
 
 
 def input_monitoring() -> tuple[str, str]:
-    """Same question for the keys. pynput knows, and macOS never says otherwise."""
-    try:
-        from pynput import keyboard
-    except ImportError as e:
-        return "unknown", f"could not ask macOS ({e})"
-    if getattr(keyboard.Listener, "IS_TRUSTED", True) is not False:
+    """Same question for the keys, asked of the Input Monitoring toggle."""
+    state = hostapp.can_watch_keys()
+    if state == "granted":
         return "granted", ""
+    if state == "unknown":
+        return "unknown", (f"macOS did not say whether {APP} may watch keys. "
+                           f"Press the key and read listener.log")
     return "MISSING", (f"System Settings -> Privacy & Security -> Input Monitoring "
                        f"-> add {APP}, then quit it completely and open it again. "
                        f"The pane opens straight from here: "

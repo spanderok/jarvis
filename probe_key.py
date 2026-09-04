@@ -26,7 +26,7 @@ MODS = {
 }
 held: list[str] = []
 
-if getattr(keyboard.Listener, "IS_TRUSTED", True) is False:
+if hostapp.can_watch_keys() == "MISSING":
     app = hostapp.name()
     print(f"{app} has no Input Monitoring permission, so no key press will ever\n"
           f"reach this script. Add it here, then quit {app} completely and open\n"

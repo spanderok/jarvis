@@ -53,5 +53,31 @@ def name(pid: int | None = None) -> str:
     return found or "your terminal"
 
 
+def can_watch_keys() -> str:
+    """"granted", "MISSING" or "unknown" - may this app see key presses?
+
+    Asked of the Input Monitoring toggle itself, because the obvious source
+    lies: pynput's Listener.IS_TRUSTED is a class attribute that stays False
+    until a listener has actually started, so reading it beforehand always
+    answers "no permission" however the settings look. IOHIDCheckAccess is the
+    toggle, and it answers before anything is started.
+    """
+    try:
+        import ctypes
+        import ctypes.util
+        path = (ctypes.util.find_library("IOKit")
+                or "/System/Library/Frameworks/IOKit.framework/IOKit")
+        iokit = ctypes.CDLL(path)
+        iokit.IOHIDCheckAccess.restype = ctypes.c_int
+        iokit.IOHIDCheckAccess.argtypes = [ctypes.c_uint32]
+        # kIOHIDRequestTypeListenEvent = 1
+        state = iokit.IOHIDCheckAccess(1)
+    except Exception:
+        return "unknown"
+    # 0 granted, 1 denied, 2 nobody has asked yet - only a denial is a no
+    return {0: "granted", 1: "MISSING"}.get(state, "unknown")
+
+
 if __name__ == "__main__":
     print(name())
+    print(can_watch_keys())
