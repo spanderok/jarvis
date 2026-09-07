@@ -16,6 +16,8 @@ macOS on Apple silicon, everything spoken stays on the machine, MIT.
 > tokens at all. A spoken question costs exactly what the same question typed
 > into Claude Code would, and not one token more.
 
+![One exchange, 38 seconds: the badge wakes on "Jarvis", listens to the question, thinks, says the answer out loud and folds back into a ring](docs/img/demo.gif)
+
 | asleep | listening | thinking | speaking |
 |---|---|---|---|
 | ![The badge folded into a small ring while nothing is happening](docs/img/badge-asleep.png) | ![The badge showing LISTENING with the live waveform of your voice](docs/img/badge-listening.png) | ![The badge unfolded: THINKING, the name of the session that holds the microphone, a small swarm of dots at work](docs/img/badge-thinking.png) | ![The badge showing SPEAKING with the waveform of the phrase being said](docs/img/badge-speaking.png) |
@@ -263,7 +265,7 @@ starts with `warning:` is not fatal - read it, it says what will be missing.
 | Model | For | Size | From |
 |---|---|---|---|
 | `vosk-model-small-en-us-0.15` | hearing the wake word | 41 MB | [alphacephei.com](https://alphacephei.com/vosk/models) |
-| `en_GB-alan-medium` | his voice (piper) | 63 MB | [piper-voices](https://huggingface.co/rhasspy/piper-voices) |
+| `en_US-hfc_male-medium` | his voice (piper) | 60 MB | [piper-voices](https://huggingface.co/rhasspy/piper-voices) |
 | `campplus.onnx` | telling your voice from a stranger's | 28 MB | [CAM++ ONNX](https://huggingface.co/FunAudioLLM/CosyVoice-300M) |
 | `parakeet-tdt-0.6b-v3` | transcribing the question | 2.3 GB | [Hugging Face](https://huggingface.co/mlx-community/parakeet-tdt-0.6b-v3) - **when the daemon first starts**, not by the installer |
 
@@ -940,8 +942,8 @@ read by a voice in another. English speaks through
 first sound), Russian through vosk-tts. Any piper voice drops in:
 
 ```sh
-JARVIS_VOICE=en_US-lessac-medium         # the shipped default is en_GB-alan-medium
-JARVIS_EXTRA_VOICES="en_US-ryan-high"    # fetched by install.sh alongside it
+JARVIS_VOICE=en_GB-northern_english_male-medium   # British; the shipped default is en_US-hfc_male-medium
+JARVIS_EXTRA_VOICES="en_US-ryan-high"             # fetched by install.sh alongside it
 ```
 
 Adding a third language is copying `locales/en.toml`. The routing vocabulary is

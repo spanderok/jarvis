@@ -82,13 +82,14 @@ asr_model = "mlx-community/parakeet-tdt-0.6b-v3"
 wake_model = "vosk-model-small-en-us-0.15"
 wake_model_url = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
 
-# Piper: offline, 63 MB per voice, about 0.3 s to first sound on Apple silicon.
-# alan is British and fits the part. Swap in any voice from
-# https://huggingface.co/rhasspy/piper-voices - en_US-lessac-medium is the
-# neutral American one, en_GB-northern_english_male-medium the broader accent.
+# Piper: offline, 60 MB per voice, about 0.3 s to first sound on Apple silicon.
+# hfc_male is the calm American one - picked by ear over six others on a long
+# answer. Swap in any voice from https://huggingface.co/rhasspy/piper-voices:
+# en_GB-northern_english_male-medium if the butler should sound British,
+# en_US-ryan-high for a brighter American voice (129 MB).
 tts_backend = "piper"
-tts_voice = "en_GB-alan-medium"
-tts_voice_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/"
+tts_voice = "en_US-hfc_male-medium"
+tts_voice_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_male/medium/"
 
 # Used only if the local voice is missing or broken. Needs the network.
 edge_voice = "en-GB-RyanNeural"
