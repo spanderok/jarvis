@@ -377,12 +377,45 @@ def _env_overrides(loc: Locale) -> Locale:
     return replace(loc, **over) if over else loc
 
 
+ENV_FILE = os.path.expanduser(
+    os.environ.get("JARVIS_ENV") or "~/.claude/jarvis/jarvis.env")
+
+
+def settings_from_file(path: str = "") -> dict[str, str]:
+    """The assignments in jarvis.env that the shell has not already exported.
+
+    The daemon and the installer source that file before anything runs, so the
+    language they see is the chosen one. `uv run lang.py` by hand sees nothing
+    but the shell - and on a Russian install printed `locale en`, the very
+    thing the README puts first under "check that everything is in place".
+    The last assignment wins, as it does in sh.
+    """
+    try:
+        text = open(path or ENV_FILE, encoding="utf-8").read()
+    except OSError:
+        return {}
+    found: dict[str, str] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            found[key] = value
+    return found
+
+
 def current(root: pathlib.Path | None = None) -> Locale:
     return _env_overrides(load(root=root))
 
 
 if __name__ == "__main__":
     import sys
+
+    # Run by hand there is no jarvisd.sh in front to export the settings, so
+    # the file is read here - the shell still wins where it says something.
+    os.environ.update(settings_from_file())
 
     if len(sys.argv) > 1 and sys.argv[1] == "list":
         print("\n".join(available()))

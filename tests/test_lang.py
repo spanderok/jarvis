@@ -321,3 +321,26 @@ def test_a_locale_nobody_can_ask_for_is_refused(tmp_path):
     write(tmp_path, body, "xx")
     with pytest.raises(lang.LocaleError, match="language_names"):
         lang.load("xx", tmp_path)
+
+
+def test_the_settings_file_is_read_when_the_shell_says_nothing(tmp_path, monkeypatch):
+    # `uv run lang.py` from a terminal: nothing exported, JARVIS_LANG=ru in the file.
+    env = tmp_path / "jarvis.env"
+    env.write_text("# comment\nJARVIS_LANG=en\nJARVIS_LANG='ru'\nJARVIS_OWNER=\"Ada\"\n"
+                   "not an assignment\n", encoding="utf-8")
+    monkeypatch.delenv("JARVIS_LANG", raising=False)
+    monkeypatch.delenv("JARVIS_OWNER", raising=False)
+    found = lang.settings_from_file(str(env))
+    assert found == {"JARVIS_LANG": "ru", "JARVIS_OWNER": "Ada"}
+
+
+def test_the_shell_wins_over_the_settings_file(tmp_path, monkeypatch):
+    # `JARVIS_LANG=en uv run lang.py` on a Russian install tries English once.
+    env = tmp_path / "jarvis.env"
+    env.write_text("JARVIS_LANG=ru\n", encoding="utf-8")
+    monkeypatch.setenv("JARVIS_LANG", "en")
+    assert "JARVIS_LANG" not in lang.settings_from_file(str(env))
+
+
+def test_a_missing_settings_file_is_not_an_error(tmp_path):
+    assert lang.settings_from_file(str(tmp_path / "absent.env")) == {}
